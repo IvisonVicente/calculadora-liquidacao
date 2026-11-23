@@ -692,7 +692,7 @@ def loop_interativo(args):
 
 def ler_args(argv):
     parser = argparse.ArgumentParser(
-        description="Calculadora de liquidação (futuros perpétuos USDT)"
+        description="LiqGuard (futuros perpétuos USDT)"
     )
     parser.add_argument("--moeda", default="BTC")
     parser.add_argument("--lado", type=normalizar_lado, default="long")
@@ -725,7 +725,7 @@ class App:
         self.after_id = None
         self.mmr_sugerido = None
 
-        root.title("Calculadora de liquidação")
+        root.title("LiqGuard")
         root.minsize(880, 620)
         root.configure(bg="#e7ebf2")
         root.protocol("WM_DELETE_WINDOW", self.fechar)
@@ -778,7 +778,7 @@ class App:
         cabeca.pack(fill="x")
         tk.Label(
             cabeca,
-            text="Calculadora de liquidação",
+            text="LiqGuard",
             bg="#142033",
             fg="white",
             font=("Segoe UI", 18, "bold"),

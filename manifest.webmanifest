@@ -1,6 +1,6 @@
 {
-  "name": "Calculadora de liquidação",
-  "short_name": "Liquidação",
+  "name": "LiqGuard",
+  "short_name": "LiqGuard",
   "description": "Liquidação, preço médio e P&L de futuros perpétuos USDT.",
   "start_url": "./calculadora_liquidacao.html",
   "scope": "./",

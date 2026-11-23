@@ -1,4 +1,4 @@
-# Calculadora de liquidação
+# LiqGuard
 
 Estimativa de liquidação, preço médio e P&L para futuros perpétuos em USDT. A cotação acompanha o par e usa o preço de marcação da Bybit.
 
