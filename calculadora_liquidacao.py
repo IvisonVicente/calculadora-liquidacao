@@ -31,6 +31,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 LEVS_TABELA = (5, 10, 25, 50, 75, 100, 125, 150)
 CACHE_FAIXAS = {}
@@ -787,25 +788,48 @@ class App:
             root.after(150, self.recalcular)
             root.after(400, self.agendar)
 
+    def _montar_marca(self, cabeca):
+        tk = self.tk
+        pasta = Path(__file__).resolve().parent
+        logo = pasta / "logo-cabeca.png"
+        icone = pasta / "icone-192.png"
+        if logo.is_file():
+            self._logo_img = tk.PhotoImage(file=str(logo))
+            tk.Label(cabeca, image=self._logo_img, bg="#0f1c2c", borderwidth=0).pack(
+                anchor="w", padx=16, pady=(12, 0)
+            )
+            tk.Label(
+                cabeca,
+                text="Gestão de risco e liquidação em tempo real",
+                bg="#0f1c2c",
+                fg="#c5d0e0",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w", padx=18, pady=(8, 12))
+        else:
+            tk.Label(
+                cabeca,
+                text="LiqGuard",
+                bg="#0f1c2c",
+                fg="white",
+                font=("Segoe UI", 18, "bold"),
+            ).pack(anchor="w", padx=18, pady=(12, 0))
+            tk.Label(
+                cabeca,
+                text="Gestão de risco e liquidação em tempo real",
+                bg="#0f1c2c",
+                fg="#c5d0e0",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w", padx=18, pady=(0, 12))
+        if icone.is_file():
+            self._icone_img = tk.PhotoImage(file=str(icone))
+            self.root.iconphoto(True, self._icone_img)
+
     def _montar_tela(self):
         tk = self.tk
         ttk = self.ttk
-        cabeca = tk.Frame(self.root, bg="#142033")
+        cabeca = tk.Frame(self.root, bg="#0f1c2c")
         cabeca.pack(fill="x")
-        tk.Label(
-            cabeca,
-            text="LiqGuard",
-            bg="#142033",
-            fg="white",
-            font=("Segoe UI", 18, "bold"),
-        ).pack(anchor="w", padx=18, pady=(12, 0))
-        tk.Label(
-            cabeca,
-            text="Gestão de risco e liquidação em tempo real",
-            bg="#142033",
-            fg="#c5d0e0",
-            font=("Segoe UI", 10),
-        ).pack(anchor="w", padx=18, pady=(0, 12))
+        self._montar_marca(cabeca)
 
         corpo = tk.Frame(self.root, bg="#e7ebf2")
         corpo.pack(fill="both", expand=True, padx=14, pady=12)
