@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f4f1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Liquidação">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone-192.png">
+  <link rel="apple-touch-icon" href="icone-192.png">
+  <title>Calculadora de liquidação</title>
+  <style>
+    :root {
+      --ink: #1c1c1e;
+      --muted: #8d9096;
+      --line: #eeeae4;
+      --card: #ffffff;
+      --field: #f3f1ee;
+      --green: #1f9d57;
+    }
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(820px 460px at 92% -8%, #ffe3d4, transparent 58%),
+        radial-gradient(640px 380px at 8% -12%, #f4efe6, transparent 52%),
+        #f7f5f2;
+    }
+    header { padding: calc(22px + env(safe-area-inset-top)) 28px 0; }
+    .cabeca, #como-instalar, main { max-width: 1120px; margin-left: auto; margin-right: auto; }
+    .cabeca { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .marca { display: flex; align-items: center; gap: 12px; }
+    .selo {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #7a5cff, #ff5b93);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px 7px;
+      box-shadow: 0 8px 16px rgba(138, 92, 246, 0.28);
+    }
+    .selo i { display: block; width: 3px; border-radius: 99px; background: #fff; }
+    .selo i:nth-child(1) { height: 8px; }
+    .selo i:nth-child(2) { height: 14px; }
+    .selo i:nth-child(3) { height: 20px; }
+    header h1 { margin: 0; font-size: 26px; font-weight: 750; letter-spacing: -0.035em; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    #btn-instalar {
+      background: #1c1c1e;
+      color: #fff;
+      border: 0;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    #como-instalar { margin-top: 10px; color: var(--muted); font-size: 13px; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+      gap: 22px;
+      padding: 18px 28px 48px;
+      align-items: start;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 24px;
+      box-shadow: 0 16px 40px rgba(70, 52, 36, 0.06);
+    }
+    .card h2 {
+      margin: 0;
+      padding: 18px 18px 0;
+      color: #9aa0a8;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+    }
+    .ajuda {
+      margin: 6px 18px 2px;
+      color: #a1a6ad;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    form { padding: 6px 16px 16px; }
+    .linha {
+      display: grid;
+      grid-template-columns: 1fr 128px;
+      gap: 10px;
+      align-items: center;
+      margin: 7px 0;
+    }
+    label { color: #4d5158; font-size: 13px; font-weight: 500; }
+    input, select {
+      width: 100%;
+      border: 1px solid transparent;
+      background: var(--field);
+      color: var(--ink);
+      font: 14px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      padding: 8px 10px;
+      border-radius: 10px;
+      outline: none;
+      text-align: right;
+    }
+    select { text-align-last: right; }
+    input:focus, select:focus { border-color: #d9d3cb; }
+    input.amarelo { background: #f8f3df; }
+    .fixo-valor {
+      background: #fff;
+      color: #8d948e;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      padding: 8px 10px;
+      min-height: 36px;
+      border-radius: 10px;
+      border: 1px dashed #ddd6cc;
+    }
+    .botoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font: 700 13px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      cursor: pointer;
+    }
+    button.escuro { background: #1c1c1e; color: #fff; }
+    button.verde { background: #fff; color: var(--ink); border: 1px solid #e6e1da; }
+    button.claro { background: transparent; color: #8b9098; padding-inline: 8px; }
+    button.largo {
+      width: 100%;
+      margin-top: 2px;
+      color: #fff;
+      border: 0;
+      background: linear-gradient(90deg, #6d5efc, #ff5d8f);
+      box-shadow: 0 10px 22px rgba(255, 93, 143, 0.22);
+    }
+    .auto {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+      color: #6f747c;
+      font-size: 13px;
+    }
+    .auto input { width: 16px; height: 16px; accent-color: #7c5cff; text-align: left; }
+    .topo-resultado { padding: 8px 2px 12px; }
+    .topo-resultado h3 { margin: 0; font-size: 28px; font-weight: 750; letter-spacing: -0.04em; }
+    .cotacao { margin: 6px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .status {
+      margin: 14px 14px 4px;
+      padding: 11px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+    }
+    .status::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      transform: translateY(-1px);
+    }
+    .grade { display: grid; grid-template-columns: 1fr 1fr; padding: 4px 8px 10px; }
+    .celula {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-bottom: 1px solid #f3f0eb;
+      font-size: 13.5px;
+    }
+    .celula:nth-child(even) { background: #faf8ff; }
+    .celula span { color: #8b9098; }
+    .celula strong { font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .celula:nth-child(4) strong { font-size: 17px; font-weight: 800; }
+    .lucro { color: var(--green); }
+    .perda { color: #d34545; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 11px 16px; text-align: right; font-variant-numeric: tabular-nums; }
+    th { color: #9aa0a8; font-size: 13px; font-weight: 600; }
+    th:first-child, td:first-child { text-align: left; }
+    td { border-top: 1px solid #f4f1ec; color: #2a2d33; }
+    tr.atual { background: #f4f0ff; }
+    tr.atual td:first-child { font-weight: 700; }
+    .nota {
+      color: #9aa0a6;
+      font-size: 13px;
+      line-height: 1.55;
+      padding: 16px 6px 0;
+      white-space: pre-wrap;
+    }
+    .tabela-box { margin-top: 14px; overflow: hidden; }
+    .tabela-box h2 { padding-bottom: 8px; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; padding: 14px 14px 32px; }
+      header { padding-inline: 14px; }
+      .cabeca, #como-instalar { margin-inline: 14px; }
+      header h1, .topo-resultado h3 { font-size: 22px; }
+      .linha { grid-template-columns: 1fr 118px; }
+      .grade { grid-template-columns: 1fr; }
+      .celula:nth-child(even) { background: #faf8ff; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="cabeca">
+      <div class="marca">
+        <span class="selo" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div>
+          <h1>Calculadora de liquidação</h1>
+          <p>Futuros perpétuos USDT · a mesma conta da planilha</p>
+        </div>
+      </div>
+      <button id="btn-instalar" type="button" hidden>Instalar app</button>
+    </div>
+    <p id="como-instalar" hidden></p>
+  </header>
+  <main>
+    <section class="card">
+      <h2>ENTRADAS</h2>
+      <p class="ajuda">Saldo começa em 0. A margem usada é o fator do lucro e da perda. O par puxa a cotação. O preço alvo simula só o P&amp;L.</p>
+      <form id="form" autocomplete="off">
+        <div class="linha"><label for="moeda">Par</label><input id="moeda" value="BTC"></div>
+        <div class="linha"><label for="lado">Lado</label>
+          <select id="lado"><option>Long</option><option>Short</option></select>
+        </div>
+        <div class="linha"><label for="modo">Modo de margem</label>
+          <select id="modo"><option>Cross</option><option>Isolada</option></select>
+        </div>
+        <div class="linha"><label for="saldo">Saldo disponível (USDT)</label><input id="saldo" value="0"></div>
+        <div class="linha"><label for="pct">% do capital alocado</label><input id="pct" value="5"></div>
+        <div class="linha"><label for="margem">Margem usada (USDT)</label><input id="margem" value="0"></div>
+        <div class="linha"><label for="alav">Alavancagem (x)</label><input id="alav" value="150"></div>
+        <div class="linha"><label for="entrada">Preço médio</label><input id="entrada" value="60450"></div>
+        <div class="linha"><label>Primeiro preço</label><div id="primeiro" class="fixo-valor">—</div></div>
+        <div class="linha"><label for="preco">Preço atual usado</label><input id="preco" value=""></div>
+        <div class="linha"><label for="alvo">Preço alvo</label><input id="alvo" value=""></div>
+        <div class="linha"><label for="nova">Nova entrada (USDT)</label><input id="nova" value=""></div>
+        <div class="linha"><label for="parcial">Realizar parcial (%)</label><input id="parcial" value=""></div>
+        <div class="linha"><label class="fixo" for="mmr">Taxa de manutenção (%)</label><input id="mmr" class="amarelo" value="0,5"></div>
+        <div class="linha"><label class="fixo" for="taxa">Taxa taker (%)</label><input id="taxa" class="amarelo" value="0,055"></div>
+        <div class="botoes">
+          <button class="escuro" id="btn-calc" type="button">Calcular</button>
+          <button class="verde" id="btn-add" type="button">Adicionar entrada</button>
+          <button class="verde" id="btn-parcial" type="button">Realizar parcial</button>
+          <button class="claro" id="btn-mmr" type="button">Usar MMR da Bybit</button>
+          <button class="verde largo" id="btn-alvo" type="button">Preço Alvo Manual</button>
+        </div>
+        <label class="auto"><input id="auto" type="checkbox" checked>Cotação do par em tempo real (5 s)</label>
+      </form>
+    </section>
+    <section>
+      <div class="topo-resultado">
+        <h3 id="titulo">Aguardando cálculo</h3>
+        <p class="cotacao" id="cotacao"></p>
+      </div>
+      <div class="card">
+        <div id="status" class="status">—</div>
+        <div class="grade" id="grade"></div>
+      </div>
+      <div class="card tabela-box">
+        <h2>MESMO CAPITAL, OUTRAS ALAVANCAGENS</h2>
+        <table>
+          <thead>
+            <tr><th>Alavancagem</th><th>Posição (USDT)</th><th>Preço de liquidação</th><th>Distância</th></tr>
+          </thead>
+          <tbody id="tabela"></tbody>
+        </table>
+      </div>
+      <p class="nota" id="nota">Informe a margem usada (USDT). O lucro e a perda usam esse valor.</p>
+    </section>
+  </main>
+  <script>
+    const LEVS = [5, 10, 25, 50, 75, 100, 125, 150];
+    const state = {
+      precoTravado: false,
+      primeiro: null,
+      precoMedio: null,
+      qtdFixa: null,
+      realizado: 0,
+      medioTexto: null,
+      travada: false,
+      ultimaQtd: null,
+      alvoAtivo: false,
+      ultimo: null,
+      timer: null,
+      parTimer: null,
+      mmrSugerido: null
+    };
+    const $ = (id) => document.getElementById(id);
+
+    function num(texto) {
+      let s = String(texto ?? "").trim().replace("%", "").replace(/\s/g, "");
+      if (!s) return 0;
+      if (s.includes(",") && s.includes(".")) {
+        if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(",", ".");
+        else s = s.replace(/,/g, "");
+      } else if (s.includes(",")) s = s.replace(",", ".");
+      const n = Number(s);
+      if (!Number.isFinite(n)) throw new Error("Número inválido.");
+      return n;
+    }
+    function br(valor, casas = 2) {
+      if (valor == null || Number.isNaN(valor)) return "—";
+      return valor.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+    }
+    function dinheiro(valor) {
+      if (valor == null || Number.isNaN(valor)) return "—";
+      let texto = valor.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+      let sinal = "";
+      if (texto.startsWith("-")) { sinal = "-"; texto = texto.slice(1); }
+      if (!texto.includes(".")) texto += ".00";
+      else if (texto.split(".")[1].length === 1) texto += "0";
+      let [inteiro, frac] = texto.split(".");
+      const grupos = [];
+      while (inteiro) { grupos.push(inteiro.slice(-3)); inteiro = inteiro.slice(0, -3); }
+      return sinal + grupos.reverse().join(".") + "," + frac;
+    }
+    function casasPreco(preco) {
+      if (preco >= 100) return 2;
+      if (preco >= 1) return 4;
+      return 6;
+    }
+    function campo(valor) {
+      return Number(valor).toFixed(10).replace(/0+$/, "").replace(/\.$/, "").replace(".", ",");
+    }
+    function campoPreco(valor) {
+      return campo(Number(valor.toFixed(casasPreco(Math.abs(valor)))));
+    }
+    function moedaDe(texto) {
+      let base = String(texto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (base.endsWith("USDT")) base = base.slice(0, -4);
+      else if (base.endsWith("USD") && base.length > 3) base = base.slice(0, -3);
+      if (!base) throw new Error("Moeda inválida.");
+      return base;
+    }
+    function statusDe(dist) {
+      if (dist == null) return "Sem liquidação";
+      if (dist <= 0) return "JÁ LIQUIDADA";
+      if (dist < 0.01) return "RISCO CRÍTICO";
+      if (dist < 0.05) return "RISCO ALTO";
+      if (dist < 0.15) return "RISCO MODERADO";
+      return "RISCO BAIXO";
+    }
+    function calcular(lado, modo, saldo, pct, alav, entrada, atual, mmr, taxa, qtd, realizado, margem) {
+      if (margem == null) margem = saldo * pct / 100;
+      if (!(margem > 0)) throw new Error("Informe a margem usada (USDT). O lucro e a perda usam esse valor.");
+      let nocional;
+      if (qtd == null) {
+        nocional = margem * alav;
+        qtd = nocional / entrada;
+      } else nocional = qtd * entrada;
+      const manut = nocional * mmr / 100;
+      const fechamento = nocional * taxa / 100;
+      const caixa = saldo > 0 ? saldo : margem;
+      const base = (modo === "cross" ? caixa : margem) + (realizado || 0);
+      const colchao = (base - manut - fechamento) / qtd;
+      const sinal = lado === "long" ? 1 : -1;
+      const liqBruto = entrada - sinal * colchao;
+      const valida = liqBruto > 0;
+      const dist = valida ? (atual - liqBruto) * sinal / atual : null;
+      const pnl = qtd * (atual - entrada) * sinal;
+      const patrimonio = base + pnl;
+      const razao = patrimonio <= 0 ? 1 : (qtd * atual * mmr / 100) / patrimonio;
+      const equilibrio = realizado && qtd > 0 ? entrada - sinal * (realizado / qtd) : entrada;
+      return {
+        margem, nocional, qtd, manut, fechamento, base,
+        liq: valida ? liqBruto : null, dist, pnl,
+        roe: margem ? pnl / margem : 0, razao, zera: 1 / alav,
+        status: statusDe(dist), insustentavel: manut + fechamento >= base,
+        realizado: realizado || 0, equilibrio
+      };
+    }
+    function realizarParcial(lado, entrada, qtd, realizado, preco, taxa, fracao) {
+      if (!(fracao > 0 && fracao < 1)) throw new Error("A parcial fica entre 0 e 100%. Use 50 para fechar metade.");
+      if (!(qtd > 0 && entrada > 0 && preco > 0)) throw new Error("Calcule a posição antes de realizar.");
+      const sinal = lado === "long" ? 1 : -1;
+      const fechada = qtd * fracao;
+      const restante = qtd - fechada;
+      const liquido = fechada * (preco - entrada) * sinal - fechada * preco * (taxa / 100);
+      const novo = realizado + liquido;
+      return { qtd: restante, realizado: novo, liquido, equilibrio: entrada - sinal * (novo / restante) };
+    }
+    function novaEntrada(lado, precoMedio, qtd, precoNovo, margemAdd, alav) {
+      if (!(margemAdd > 0)) throw new Error("Informe a nova entrada em USDT de margem.");
+      if (!(qtd > 0 && precoMedio > 0 && precoNovo > 0 && alav > 0)) throw new Error("Calcule a posição antes de adicionar uma entrada.");
+      const qtdAdd = (margemAdd * alav) / precoNovo;
+      const total = qtd + qtdAdd;
+      const novo = (qtd * precoMedio + qtdAdd * precoNovo) / total;
+      const sinal = lado === "long" ? 1 : -1;
+      return { qtd: total, medio: novo, qtdAdd, melhorou: (novo - precoMedio) * sinal < 0 };
+    }
+    function simular(lado, entrada, qtd, margem, taxa, alvo) {
+      if (!(alvo > 0)) throw new Error("O preço alvo precisa ser maior que zero.");
+      if (!(qtd > 0 && entrada > 0)) throw new Error("Calcule a posição antes de simular o preço alvo.");
+      const sinal = lado === "long" ? 1 : -1;
+      const pnl = qtd * (alvo - entrada) * sinal;
+      const taxaFecha = qtd * alvo * taxa / 100;
+      return { alvo, pnl, liquido: pnl - taxaFecha, roe: margem ? pnl / margem : 0 };
+    }
+    function avaliar(pedido, atual) {
+      const base = calcular(pedido.lado, pedido.modo, pedido.saldo, pedido.pct, pedido.alav, pedido.entrada, atual, pedido.mmr, pedido.taxa, pedido.qtd, pedido.realizado, pedido.margem);
+      const niveis = [...new Set([...LEVS, pedido.alav])].sort((a, b) => a - b);
+      base.tabela = niveis.map((nivel) => {
+        const mesma = pedido.qtd != null && Math.abs(nivel - pedido.alav) < 1e-9;
+        const linha = calcular(
+          pedido.lado, pedido.modo, pedido.saldo, pedido.pct, nivel, pedido.entrada, atual, pedido.mmr, pedido.taxa,
+          mesma ? pedido.qtd : null, mesma ? pedido.realizado : 0, pedido.margem
+        );
+        linha.alav = nivel;
+        linha.marca = Math.abs(nivel - pedido.alav) < 1e-9;
+        return linha;
+      });
+      return base;
+    }
+    function ler() {
+      const moeda = moedaDe($("moeda").value);
+      const lado = $("lado").value === "Short" ? "short" : "long";
+      const modo = $("modo").value === "Isolada" ? "isolada" : "cross";
+      const saldo = num($("saldo").value || "0");
+      const pct = num($("pct").value || "0");
+      const alav = num($("alav").value);
+      const margem = num($("margem").value || "0");
+      const entradaCampo = num($("entrada").value);
+      const mmr = num($("mmr").value);
+      const taxa = num($("taxa").value);
+      if (saldo < 0) throw new Error("O saldo não pode ser negativo.");
+      if (!(pct >= 0 && pct <= 100)) throw new Error("O percentual alocado fica entre 0 e 100. Para 5%, digite 5.");
+      if (!(alav >= 1 && alav <= 200)) throw new Error("A alavancagem fica entre 1 e 200.");
+      if (!(entradaCampo > 0)) throw new Error("O preço de entrada precisa ser maior que zero.");
+      if (!(mmr >= 0 && mmr <= 20)) throw new Error("A manutenção é em percentual. Para 0,5%, digite 0,5.");
+      if (!(taxa >= 0 && taxa <= 5)) throw new Error("A taxa taker é em percentual. Para 0,055%, digite 0,055.");
+      if (!(margem > 0)) throw new Error("Informe a margem usada (USDT). O lucro e a perda usam esse valor.");
+      const texto = $("entrada").value.trim();
+      let entrada, qtd, realizado;
+      if (state.qtdFixa != null && texto === (state.medioTexto || "")) {
+        entrada = state.precoMedio;
+        qtd = state.qtdFixa;
+        realizado = state.realizado;
+      } else if (state.qtdFixa != null) {
+        state.precoMedio = entradaCampo;
+        state.medioTexto = texto;
+        entrada = entradaCampo;
+        qtd = state.qtdFixa;
+        realizado = state.realizado;
+      } else {
+        entrada = entradaCampo;
+        qtd = null;
+        realizado = 0;
+        state.precoMedio = entrada;
+        state.realizado = 0;
+        if (!state.travada) state.primeiro = entrada;
+      }
+      if (state.primeiro == null) state.primeiro = entrada;
+      let manual = null;
+      if (state.precoTravado && $("preco").value.trim()) manual = num($("preco").value);
+      return { moeda, lado, modo, saldo, pct, alav, margem, entrada, mmr, taxa, manual, qtd, realizado, primeiro: state.primeiro };
+    }
+    function reiniciar() {
+      state.qtdFixa = null;
+      state.realizado = 0;
+      state.precoMedio = null;
+      state.primeiro = null;
+      state.medioTexto = null;
+      state.travada = false;
+      state.ultimaQtd = null;
+      state.alvoAtivo = false;
+    }
+    async function buscarPreco(moeda) {
+      try {
+        const resposta = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${moeda}USDT`);
+        const dados = await resposta.json();
+        const lista = (dados.result || {}).list || [];
+        if (!lista.length) throw new Error("par inexistente");
+        return { preco: Number(lista[0].markPrice), origem: "Ao vivo (Bybit, mark)" };
+      } catch (erroBybit) {
+        try {
+          const resposta = await fetch(`https://api.coinbase.com/v2/prices/${moeda}-USD/spot`);
+          const dados = await resposta.json();
+          return { preco: Number(dados.data.amount), origem: "Ao vivo (Coinbase)" };
+        } catch (erroCoin) {
+          throw new Error("Sem cotação da Bybit e da Coinbase.");
+        }
+      }
+    }
+    async function faixas(moeda) {
+      const resposta = await fetch(`https://api.bybit.com/v5/market/risk-limit?category=linear&symbol=${moeda}USDT`);
+      const dados = await resposta.json();
+      return ((dados.result || {}).list || []).map((item) => ({
+        id: Number(item.id || 0),
+        limite: Number(item.riskLimitValue),
+        mmr: Number(item.maintenanceMargin),
+        alavMax: Number(item.maxLeverage)
+      })).sort((a, b) => a.limite - b.limite);
+    }
+    function escolherFaixa(lista, nocional) {
+      if (!lista.length) return null;
+      for (const faixa of lista) if (nocional <= faixa.limite + 1e-6) return faixa;
+      return { ...lista[lista.length - 1], acima: true };
+    }
+    function notaFaixa(faixa, mmr, alav) {
+      if (!faixa) return "";
+      const mmrFaixa = faixa.mmr * 100;
+      let texto = `Faixa ${faixa.id} da Bybit: até ${br(faixa.limite, 0)} USDT, manutenção ${br(mmrFaixa, 2)}%, alavancagem máxima ${faixa.alavMax}x.`;
+      if (Math.abs(mmrFaixa - mmr) >= 0.01) texto += ` Esta conta usa ${br(mmr, 2)}%, como na planilha.`;
+      if (faixa.acima) texto += " A posição passa do limite da última faixa.";
+      else if (alav > faixa.alavMax + 1e-9) texto += ` ${alav}x passa do máximo desta faixa.`;
+      return texto;
+    }
+    function pintar(pacote) {
+      const casas = casasPreco(pacote.entrada);
+      $("titulo").textContent = `${pacote.moeda}USDT   ${pacote.lado === "long" ? "Long" : "Short"}   ${pacote.modo === "cross" ? "Cross" : "Isolada"}   ${pacote.alav}x`;
+      $("primeiro").textContent = pacote.primeiro ? br(pacote.primeiro, casas) : "—";
+      if (!state.precoTravado && document.activeElement !== $("preco")) $("preco").value = campoPreco(pacote.atual);
+      const cores = {
+        "RISCO BAIXO": ["#e5f6ee", "#0f7a45"],
+        "RISCO MODERADO": ["#fff6de", "#8a6410"],
+        "RISCO ALTO": ["#ffeedf", "#b45309"],
+        "RISCO CRÍTICO": ["#fde8e6", "#b42318"],
+        "JÁ LIQUIDADA": ["#fde8e6", "#b42318"],
+        "Sem liquidação": ["#e7f5f8", "#0f6f8a"]
+      };
+      const [fundo, tinta] = cores[pacote.status] || ["#eef2f7", "#142033"];
+      const status = $("status");
+      status.textContent = pacote.status;
+      status.style.background = fundo;
+      status.style.color = tinta;
+      let efeito = null;
+      if (state.alvoAtivo && $("alvo").value.trim()) {
+        try { efeito = simular(pacote.lado, pacote.entrada, pacote.qtd, pacote.margem, pacote.taxa, num($("alvo").value)); }
+        catch (erro) { $("nota").textContent = erro.message; efeito = null; }
+      }
+      const linhas = [
+        ["Margem usada", dinheiro(pacote.margem) + " USDT", "Preço de liquidação", pacote.liq == null ? "sem liquidação" : br(pacote.liq, casas)],
+        ["Tamanho da posição", dinheiro(pacote.nocional) + " USDT", "Distância até a liquidação", pacote.dist == null ? "—" : br(pacote.dist * 100) + "%"],
+        ["Quantidade", br(pacote.qtd, 6) + " " + pacote.moeda, efeito ? "P&L no preço alvo" : "P&L não realizado", dinheiro(efeito ? efeito.pnl : pacote.pnl) + " USDT", true],
+        ["Margem de manutenção", dinheiro(pacote.manut) + " USDT", efeito ? "ROE no preço alvo" : "ROE sobre a margem", br((efeito ? efeito.roe : pacote.roe) * 100) + "%", true],
+        ["Taxa de fechamento", dinheiro(pacote.fechamento) + " USDT", "Razão de margem", br(pacote.razao * 100) + "%"],
+        ["Margem base", dinheiro(pacote.base) + " USDT", "Variação que zera a margem", br(pacote.zera * 100) + "%"],
+        ["Lucro realizado", dinheiro(pacote.realizado) + " USDT", "Preço médio ajustado", br(pacote.equilibrio, casas)],
+        ["Primeiro preço", br(pacote.primeiro, casas), "Última entrada", state.ultimaQtd ? br(state.ultimaQtd, 6) + " " + pacote.moeda : "—"],
+        ["P&L na cotação", efeito ? dinheiro(pacote.pnl) + " USDT" : "—", "ROE na cotação", efeito ? br(pacote.roe * 100) + "%" : "—", true]
+      ];
+      const pnlSim = efeito ? efeito.pnl : pacote.pnl;
+      $("grade").innerHTML = linhas.map((item) => {
+        const cor = item[4] ? (pnlSim >= 0 && item[0].startsWith("P&L no") || item[0].startsWith("ROE no") ? (efeito ? efeito.pnl : pacote.pnl) : (item[0].includes("cotação") ? pacote.pnl : (efeito ? efeito.pnl : pacote.pnl))) : null;
+        const classeDir = item[4] ? ((item[0].includes("cotação") ? pacote.pnl : (efeito ? efeito.pnl : pacote.pnl)) >= 0 ? "lucro" : "perda") : "";
+        const classeEsq = item[4] && item[0].includes("cotação") ? (pacote.pnl >= 0 ? "lucro" : "perda") : "";
+        return `<div class="celula"><span>${item[0]}</span><strong class="${item[0].startsWith("P&L") || item[0].startsWith("ROE") ? classeDir : ""}">${item[1]}</strong></div>
+                <div class="celula"><span>${item[2]}</span><strong class="${item[2].startsWith("P&L") || item[2].startsWith("ROE") ? classeDir : ""}">${item[3]}</strong></div>`;
+      }).join("");
+      if (efeito) {
+        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Cotação ao vivo ${br(pacote.atual, casasPreco(pacote.atual))}    Alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}    ${pacote.origem}`;
+      } else {
+        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Atual ${br(pacote.atual, casasPreco(pacote.atual))}    ${pacote.origem}`;
+      }
+      $("tabela").innerHTML = pacote.tabela.map((linha) => {
+        const liq = linha.liq == null ? "sem liquidação" : br(linha.liq, casas);
+        const dist = linha.dist == null ? "—" : br(linha.dist * 100) + "%";
+        return `<tr class="${linha.marca ? "atual" : ""}"><td>${linha.alav}x${linha.marca ? "  ←" : ""}</td><td>${dinheiro(linha.nocional)}</td><td>${liq}</td><td>${dist}</td></tr>`;
+      }).join("");
+      const notas = [];
+      if (efeito) {
+        const nome = efeito.pnl >= 0 ? "Lucro" : "Perda";
+        notas.push(`Simulação a partir da cotação ao vivo ${br(pacote.atual, casasPreco(pacote.atual))}. Preço de liquidação e distância usam essa cotação. Preço médio da posição permanece ${br(pacote.entrada, casas)}. ${nome} no alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}: ${dinheiro(efeito.pnl)} USDT, ROE ${br(efeito.roe * 100)}%. Se fechar no alvo, o líquido fica ${dinheiro(efeito.liquido)} USDT depois da taxa taker.`);
+      }
+      if (state.travada) notas.push("Primeiro preço fica fixo. O preço médio é a média da posição aberta. O preço médio ajustado é o equilíbrio depois do lucro realizado.");
+      if (pacote.faixa) notas.push(pacote.faixa);
+      if (pacote.insustentavel) notas.push("Manutenção e taxa de fechamento já consomem a margem base na entrada.");
+      if (pacote.saldo > 0) notas.push("Variação que zera a margem é o movimento de 1 ÷ alavancagem, sobre a margem usada. No Cross, a liquidação usa o saldo inteiro.");
+      else notas.push("O saldo está zerado. Lucro, perda e liquidação usam a margem informada em USDT.");
+      $("nota").textContent = notas.join("\n");
+      state.ultimo = pacote;
+    }
+    async function recalcular(rede = true) {
+      let pedido;
+      try { pedido = ler(); }
+      catch (erro) {
+        $("nota").textContent = erro.message;
+        if (rede && $("auto").checked) cotacaoSolta();
+        return;
+      }
+      try {
+        let atual, origem;
+        if (!rede && state.ultimo) {
+          atual = state.ultimo.atual;
+          origem = state.ultimo.origem;
+        } else if (pedido.manual) {
+          atual = pedido.manual;
+          origem = "Manual";
+        } else {
+          if ($("titulo").textContent === "Aguardando cálculo") $("cotacao").textContent = "Buscando cotação...";
+          const vivo = await buscarPreco(pedido.moeda);
+          atual = vivo.preco;
+          origem = vivo.origem;
+        }
+        if (!(atual > 0)) throw new Error("O preço atual precisa ser maior que zero.");
+        const pacote = avaliar(pedido, atual);
+        pacote.moeda = pedido.moeda;
+        pacote.lado = pedido.lado;
+        pacote.modo = pedido.modo;
+        pacote.alav = pedido.alav;
+        pacote.entrada = pedido.entrada;
+        pacote.primeiro = pedido.primeiro;
+        pacote.atual = atual;
+        pacote.origem = origem;
+        pacote.saldo = pedido.saldo;
+        pacote.mmr = pedido.mmr;
+        pacote.taxa = pedido.taxa;
+        let faixa = null;
+        try { faixa = escolherFaixa(await faixas(pedido.moeda), pacote.nocional); } catch (e) { faixa = null; }
+        pacote.faixa = notaFaixa(faixa, pedido.mmr, pedido.alav);
+        if (faixa) state.mmrSugerido = faixa.mmr * 100;
+        pintar(pacote);
+      } catch (erro) {
+        $("nota").textContent = erro.message;
+      }
+    }
+    async function cotacaoSolta() {
+      if (state.precoTravado) return;
+      try {
+        const vivo = await buscarPreco(moedaDe($("moeda").value));
+        if (document.activeElement !== $("preco")) $("preco").value = campoPreco(vivo.preco);
+        $("cotacao").textContent = `Atual ${br(vivo.preco, casasPreco(vivo.preco))}    ${vivo.origem}`;
+      } catch (e) { /* a nota de margem já está visível */ }
+    }
+    function agendar() {
+      clearInterval(state.timer);
+      if ($("auto").checked) state.timer = setInterval(() => recalcular(true), 5000);
+    }
+    $("btn-calc").onclick = () => recalcular(true);
+    $("btn-alvo").onclick = () => {
+      if (!$("alvo").value.trim()) {
+        state.alvoAtivo = false;
+        $("nota").textContent = "Informe o preço alvo para simular o lucro ou a perda.";
+        return;
+      }
+      try { if (!(num($("alvo").value) > 0)) throw new Error("O preço alvo precisa ser maior que zero."); }
+      catch (erro) { $("nota").textContent = erro.message; return; }
+      state.precoTravado = false;
+      state.alvoAtivo = true;
+      recalcular(true);
+    };
+    $("btn-parcial").onclick = () => {
+      try {
+        if (!$("parcial").value.trim()) throw new Error("Preencha Realizar parcial (%). 50 fecha metade da posição.");
+        if (!state.ultimo) throw new Error("Calcule a posição antes de realizar.");
+        const medio = state.precoMedio == null ? state.ultimo.entrada : state.precoMedio;
+        const efeito = realizarParcial(state.ultimo.lado, medio, state.ultimo.qtd, state.realizado, state.ultimo.atual, state.ultimo.taxa, num($("parcial").value) / 100);
+        if (state.primeiro == null) state.primeiro = medio;
+        state.precoMedio = medio;
+        state.qtdFixa = efeito.qtd;
+        state.realizado = efeito.realizado;
+        state.travada = true;
+        state.medioTexto = campoPreco(medio);
+        $("entrada").value = state.medioTexto;
+        $("parcial").value = "";
+        $("nota").textContent = `Parcial de ${dinheiro(efeito.liquido)} USDT. Primeiro preço ${campoPreco(state.primeiro)}. Preço médio da posição ${state.medioTexto}.`;
+        recalcular(false);
+      } catch (erro) { $("nota").textContent = erro.message; }
+    };
+    $("btn-add").onclick = () => {
+      try {
+        if (!$("nova").value.trim()) throw new Error("Preencha Nova entrada (USDT) com a margem adicional.");
+        if (!state.ultimo) throw new Error("Informe a margem usada e o preço médio antes de adicionar.");
+        const medio = state.precoMedio == null ? state.ultimo.entrada : state.precoMedio;
+        const margemAdd = num($("nova").value);
+        const efeito = novaEntrada(state.ultimo.lado, medio, state.ultimo.qtd, state.ultimo.atual, margemAdd, state.ultimo.alav);
+        if (state.primeiro == null) state.primeiro = medio;
+        state.precoMedio = efeito.medio;
+        state.qtdFixa = efeito.qtd;
+        state.ultimaQtd = efeito.qtdAdd;
+        state.travada = true;
+        state.medioTexto = campoPreco(efeito.medio);
+        $("entrada").value = state.medioTexto;
+        $("margem").value = campo(num($("margem").value || "0") + margemAdd);
+        $("nova").value = "";
+        $("nota").textContent = `Nova entrada de ${dinheiro(margemAdd)} USDT de margem. O preço médio ${efeito.melhorou ? "melhorou" : "piorou"} para ${state.medioTexto}. Primeiro preço permanece ${campoPreco(state.primeiro)}.`;
+        recalcular(false);
+      } catch (erro) { $("nota").textContent = erro.message; }
+    };
+    $("btn-mmr").onclick = async () => {
+      try {
+        if (state.mmrSugerido == null) {
+          const pedido = ler();
+          const lista = await faixas(pedido.moeda);
+          const faixa = escolherFaixa(lista, pedido.margem * pedido.alav);
+          if (!faixa) throw new Error("Calcule uma vez com internet para ler a faixa de risco da Bybit.");
+          state.mmrSugerido = faixa.mmr * 100;
+        }
+        $("mmr").value = campo(state.mmrSugerido);
+        recalcular(false);
+      } catch (erro) { $("nota").textContent = erro.message; }
+    };
+    $("preco").addEventListener("input", () => { state.precoTravado = $("preco").value.trim() !== ""; });
+    $("moeda").addEventListener("input", () => {
+      clearTimeout(state.parTimer);
+      state.parTimer = setTimeout(async () => {
+        state.precoTravado = false;
+        $("preco").value = "";
+        reiniciar();
+        try {
+          const vivo = await buscarPreco(moedaDe($("moeda").value));
+          $("entrada").value = campoPreco(vivo.preco);
+        } catch (erro) {
+          $("nota").textContent = erro.message;
+        }
+        recalcular(true);
+      }, 450);
+    });
+    $("lado").addEventListener("change", () => { reiniciar(); recalcular(true); });
+    $("pct").addEventListener("change", () => {
+      const saldo = num($("saldo").value || "0");
+      if (saldo > 0 && !state.travada) $("margem").value = campo(saldo * num($("pct").value || "0") / 100);
+      recalcular(true);
+    });
+    $("margem").addEventListener("change", () => {
+      const saldo = num($("saldo").value || "0");
+      if (saldo > 0) $("pct").value = campo(num($("margem").value || "0") / saldo * 100);
+      recalcular(true);
+    });
+    ["saldo", "alav", "entrada", "mmr", "taxa", "modo"].forEach((id) => {
+      $(id).addEventListener("change", () => recalcular(true));
+    });
+    $("auto").addEventListener("change", agendar);
+    $("form").addEventListener("submit", (evento) => evento.preventDefault());
+    agendar();
+    recalcular(true);
+
+    let instalarEvento = null;
+    window.addEventListener("beforeinstallprompt", (evento) => {
+      evento.preventDefault();
+      instalarEvento = evento;
+      $("btn-instalar").hidden = false;
+    });
+    $("btn-instalar").onclick = async () => {
+      if (!instalarEvento) return;
+      instalarEvento.prompt();
+      await instalarEvento.userChoice;
+      instalarEvento = null;
+      $("btn-instalar").hidden = true;
+    };
+    const jaInstalado = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    const iphone = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (!jaInstalado && iphone) {
+      const dica = $("como-instalar");
+      dica.hidden = false;
+      dica.textContent = "No iPhone ou iPad: toque em Compartilhar e escolha Adicionar à Tela de Início.";
+    }
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+  </script>
+</body>
+</html>
