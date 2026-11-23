@@ -2,7 +2,7 @@
 
 Estimativa de liquidação, preço médio e P&L para futuros perpétuos em USDT. A cotação acompanha o par e usa o preço de marcação da Bybit.
 
-**Demonstração:** https://ivisonvicente.github.io/calculadora-liquidacao/
+**Demonstração:** https://ivisonvicente.github.io/liqguard/
 
 ## O que o projeto mostra
 

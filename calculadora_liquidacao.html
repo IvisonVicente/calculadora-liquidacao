@@ -222,7 +222,7 @@
         <span class="selo" aria-hidden="true"><i></i><i></i><i></i></span>
         <div>
           <h1>LiqGuard</h1>
-          <p>Futuros perpétuos USDT · a mesma conta da planilha</p>
+          <p>Gestão de risco e liquidação em tempo real</p>
         </div>
       </div>
       <button id="btn-instalar" type="button" hidden>Instalar app</button>
@@ -296,6 +296,9 @@
       travada: false,
       ultimaQtd: null,
       alvoAtivo: false,
+      cotacao: null,
+      busca: 0,
+      rodada: 0,
       ultimo: null,
       timer: null,
       parTimer: null,
@@ -479,21 +482,86 @@
       state.travada = false;
       state.ultimaQtd = null;
       state.alvoAtivo = false;
+      guardar();
+    }
+    function hora(ms) {
+      return new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+    function guardar() {
+      const dados = {
+        moeda: $("moeda").value, lado: $("lado").value, modo: $("modo").value,
+        saldo: $("saldo").value, pct: $("pct").value, margem: $("margem").value,
+        alav: $("alav").value, entrada: $("entrada").value,
+        preco: state.precoTravado ? $("preco").value : "",
+        alvo: $("alvo").value, mmr: $("mmr").value, taxa: $("taxa").value,
+        auto: $("auto").checked, precoTravado: state.precoTravado, alvoAtivo: state.alvoAtivo,
+        primeiro: state.primeiro, precoMedio: state.precoMedio, qtdFixa: state.qtdFixa,
+        realizado: state.realizado, medioTexto: state.medioTexto, travada: state.travada,
+        ultimaQtd: state.ultimaQtd, cotacao: state.cotacao
+      };
+      try { localStorage.setItem("liqguard-operacao", JSON.stringify(dados)); } catch (e) { /* o aparelho pode bloquear o armazenamento */ }
+    }
+    function restaurar() {
+      let dados = null;
+      try { dados = JSON.parse(localStorage.getItem("liqguard-operacao") || "null"); } catch (e) { dados = null; }
+      if (!dados) return;
+      ["moeda", "lado", "modo", "saldo", "pct", "margem", "alav", "entrada", "alvo", "mmr", "taxa"].forEach((id) => {
+        if (dados[id] != null) $(id).value = dados[id];
+      });
+      $("auto").checked = dados.auto !== false;
+      state.precoTravado = !!dados.precoTravado;
+      state.alvoAtivo = !!dados.alvoAtivo;
+      state.primeiro = dados.primeiro ?? null;
+      state.precoMedio = dados.precoMedio ?? null;
+      state.qtdFixa = dados.qtdFixa ?? null;
+      state.realizado = Number(dados.realizado) || 0;
+      state.medioTexto = dados.medioTexto || null;
+      state.travada = !!dados.travada;
+      state.ultimaQtd = dados.ultimaQtd ?? null;
+      if (dados.cotacao && dados.cotacao.preco > 0) state.cotacao = dados.cotacao;
+      if (state.precoTravado && dados.preco) $("preco").value = dados.preco;
+    }
+    function usarUltima(moeda) {
+      const salva = state.cotacao;
+      if (!salva || salva.moeda !== moeda || !(salva.preco > 0)) return null;
+      return {
+        preco: salva.preco,
+        origem: `Última cotação ${hora(salva.quando)} · ${salva.origem}`,
+        aviso: "A Bybit e a Coinbase não responderam. A conta segue na última cotação válida, sem usar o preço de entrada."
+      };
+    }
+    function registrarCotacao(moeda, preco, origem) {
+      state.cotacao = { moeda, preco, origem, quando: Date.now() };
+      guardar();
     }
     async function buscarPreco(moeda) {
+      const id = ++state.busca;
+      const atual = () => id === state.busca;
       try {
         const resposta = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${moeda}USDT`);
+        if (!atual()) return null;
         const dados = await resposta.json();
         const lista = (dados.result || {}).list || [];
-        if (!lista.length) throw new Error("par inexistente");
-        return { preco: Number(lista[0].markPrice), origem: "Ao vivo (Bybit, mark)" };
+        const preco = lista.length ? Number(lista[0].markPrice) : 0;
+        if (!(preco > 0)) throw new Error("par inexistente");
+        const origem = "Ao vivo (Bybit, mark)";
+        registrarCotacao(moeda, preco, origem);
+        return { preco, origem };
       } catch (erroBybit) {
         try {
           const resposta = await fetch(`https://api.coinbase.com/v2/prices/${moeda}-USD/spot`);
+          if (!atual()) return null;
           const dados = await resposta.json();
-          return { preco: Number(dados.data.amount), origem: "Ao vivo (Coinbase)" };
+          const preco = Number(dados.data.amount);
+          if (!(preco > 0)) throw new Error("sem preço");
+          const origem = "Ao vivo (Coinbase)";
+          registrarCotacao(moeda, preco, origem);
+          return { preco, origem };
         } catch (erroCoin) {
-          throw new Error("Sem cotação da Bybit e da Coinbase.");
+          if (!atual()) return null;
+          const ultima = usarUltima(moeda);
+          if (ultima) return ultima;
+          throw new Error("Sem cotação da Bybit e da Coinbase. O preço de entrada não entra no lugar da cotação.");
         }
       }
     }
@@ -563,10 +631,11 @@
         return `<div class="celula"><span>${item[0]}</span><strong class="${item[0].startsWith("P&L") || item[0].startsWith("ROE") ? classeDir : ""}">${item[1]}</strong></div>
                 <div class="celula"><span>${item[2]}</span><strong class="${item[2].startsWith("P&L") || item[2].startsWith("ROE") ? classeDir : ""}">${item[3]}</strong></div>`;
       }).join("");
+      const relogio = state.cotacao && state.cotacao.moeda === pacote.moeda && !String(pacote.origem).startsWith("Última") && pacote.origem !== "Manual" ? `    ${hora(state.cotacao.quando)}` : "";
       if (efeito) {
-        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Cotação ao vivo ${br(pacote.atual, casasPreco(pacote.atual))}    Alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}    ${pacote.origem}`;
+        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Cotação ${br(pacote.atual, casasPreco(pacote.atual))}    Alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}    ${pacote.origem}${relogio}`;
       } else {
-        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Atual ${br(pacote.atual, casasPreco(pacote.atual))}    ${pacote.origem}`;
+        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Atual ${br(pacote.atual, casasPreco(pacote.atual))}    ${pacote.origem}${relogio}`;
       }
       $("tabela").innerHTML = pacote.tabela.map((linha) => {
         const liq = linha.liq == null ? "sem liquidação" : br(linha.liq, casas);
@@ -574,6 +643,7 @@
         return `<tr class="${linha.marca ? "atual" : ""}"><td>${linha.alav}x${linha.marca ? "  ←" : ""}</td><td>${dinheiro(linha.nocional)}</td><td>${liq}</td><td>${dist}</td></tr>`;
       }).join("");
       const notas = [];
+      if (pacote.avisoCotacao) notas.push(pacote.avisoCotacao);
       if (efeito) {
         const nome = efeito.pnl >= 0 ? "Lucro" : "Perda";
         notas.push(`Simulação a partir da cotação ao vivo ${br(pacote.atual, casasPreco(pacote.atual))}. Preço de liquidação e distância usam essa cotação. Preço médio da posição permanece ${br(pacote.entrada, casas)}. ${nome} no alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}: ${dinheiro(efeito.pnl)} USDT, ROE ${br(efeito.roe * 100)}%. Se fechar no alvo, o líquido fica ${dinheiro(efeito.liquido)} USDT depois da taxa taker.`);
@@ -585,29 +655,36 @@
       else notas.push("O saldo está zerado. Lucro, perda e liquidação usam a margem informada em USDT.");
       $("nota").textContent = notas.join("\n");
       state.ultimo = pacote;
+      guardar();
     }
     async function recalcular(rede = true) {
+      const rodada = ++state.rodada;
       let pedido;
       try { pedido = ler(); }
       catch (erro) {
         $("nota").textContent = erro.message;
+        guardar();
         if (rede && $("auto").checked) cotacaoSolta();
         return;
       }
       try {
-        let atual, origem;
+        let atual, origem, avisoCotacao = "";
         if (!rede && state.ultimo) {
           atual = state.ultimo.atual;
           origem = state.ultimo.origem;
+          avisoCotacao = state.ultimo.avisoCotacao || "";
         } else if (pedido.manual) {
           atual = pedido.manual;
           origem = "Manual";
         } else {
           if ($("titulo").textContent === "Aguardando cálculo") $("cotacao").textContent = "Buscando cotação...";
           const vivo = await buscarPreco(pedido.moeda);
+          if (rodada !== state.rodada || !vivo) return;
           atual = vivo.preco;
           origem = vivo.origem;
+          avisoCotacao = vivo.aviso || "";
         }
+        if (rodada !== state.rodada) return;
         if (!(atual > 0)) throw new Error("O preço atual precisa ser maior que zero.");
         const pacote = avaliar(pedido, atual);
         pacote.moeda = pedido.moeda;
@@ -618,16 +695,18 @@
         pacote.primeiro = pedido.primeiro;
         pacote.atual = atual;
         pacote.origem = origem;
+        pacote.avisoCotacao = avisoCotacao;
         pacote.saldo = pedido.saldo;
         pacote.mmr = pedido.mmr;
         pacote.taxa = pedido.taxa;
         let faixa = null;
         try { faixa = escolherFaixa(await faixas(pedido.moeda), pacote.nocional); } catch (e) { faixa = null; }
+        if (rodada !== state.rodada) return;
         pacote.faixa = notaFaixa(faixa, pedido.mmr, pedido.alav);
         if (faixa) state.mmrSugerido = faixa.mmr * 100;
         pintar(pacote);
       } catch (erro) {
-        $("nota").textContent = erro.message;
+        if (rodada === state.rodada) $("nota").textContent = erro.message;
       }
     }
     async function cotacaoSolta() {
@@ -636,7 +715,14 @@
         const vivo = await buscarPreco(moedaDe($("moeda").value));
         if (document.activeElement !== $("preco")) $("preco").value = campoPreco(vivo.preco);
         $("cotacao").textContent = `Atual ${br(vivo.preco, casasPreco(vivo.preco))}    ${vivo.origem}`;
-      } catch (e) { /* a nota de margem já está visível */ }
+      } catch (erro) {
+        const ultima = usarUltima(moedaDe($("moeda").value));
+        if (ultima && document.activeElement !== $("preco")) {
+          $("preco").value = campoPreco(ultima.preco);
+          $("cotacao").textContent = `Atual ${br(ultima.preco, casasPreco(ultima.preco))}    ${ultima.origem}`;
+        }
+        $("nota").textContent = ultima ? ultima.aviso : erro.message;
+      }
     }
     function agendar() {
       clearInterval(state.timer);
@@ -669,6 +755,7 @@
         state.medioTexto = campoPreco(medio);
         $("entrada").value = state.medioTexto;
         $("parcial").value = "";
+        guardar();
         $("nota").textContent = `Parcial de ${dinheiro(efeito.liquido)} USDT. Primeiro preço ${campoPreco(state.primeiro)}. Preço médio da posição ${state.medioTexto}.`;
         recalcular(false);
       } catch (erro) { $("nota").textContent = erro.message; }
@@ -689,6 +776,7 @@
         $("entrada").value = state.medioTexto;
         $("margem").value = campo(num($("margem").value || "0") + margemAdd);
         $("nova").value = "";
+        guardar();
         $("nota").textContent = `Nova entrada de ${dinheiro(margemAdd)} USDT de margem. O preço médio ${efeito.melhorou ? "melhorou" : "piorou"} para ${state.medioTexto}. Primeiro preço permanece ${campoPreco(state.primeiro)}.`;
         recalcular(false);
       } catch (erro) { $("nota").textContent = erro.message; }
@@ -738,6 +826,7 @@
     });
     $("auto").addEventListener("change", agendar);
     $("form").addEventListener("submit", (evento) => evento.preventDefault());
+    restaurar();
     agendar();
     recalcular(true);
 

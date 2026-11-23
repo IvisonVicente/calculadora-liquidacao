@@ -34,6 +34,7 @@ import urllib.request
 
 LEVS_TABELA = (5, 10, 25, 50, 75, 100, 125, 150)
 CACHE_FAIXAS = {}
+ULTIMA_COTACAO = {}
 
 LADOS = {
     "long": "long",
@@ -375,15 +376,30 @@ def resolver_cotacao(moeda, manual, entrada):
         return manual, "Manual", ""
     erros = []
     try:
-        return preco_bybit(moeda), "Ao vivo (Bybit, mark)", ""
+        preco = preco_bybit(moeda)
+        return _registrar_cotacao(moeda, preco, "Ao vivo (Bybit, mark)")
     except Exception as exc:
         erros.append(f"Bybit: {exc}")
     try:
-        return preco_coinbase(moeda), "Ao vivo (Coinbase)", ""
+        preco = preco_coinbase(moeda)
+        return _registrar_cotacao(moeda, preco, "Ao vivo (Coinbase)")
     except Exception as exc:
         erros.append(f"Coinbase: {exc}")
-    aviso = "Sem cotação (" + "; ".join(erros) + "). Usando o preço de entrada."
-    return entrada, "Sem cotação: usando a entrada", aviso
+    guardada = ULTIMA_COTACAO.get(moeda)
+    if guardada:
+        preco, origem, quando = guardada
+        hora = time.strftime("%H:%M:%S", time.localtime(quando))
+        aviso = "A Bybit e a Coinbase não responderam. A conta segue na última cotação válida, sem usar o preço de entrada."
+        return preco, f"Última cotação {hora} · {origem}", aviso
+    raise RuntimeError(
+        "Sem cotação da Bybit e da Coinbase (" + "; ".join(erros) + "). O preço de entrada não entra no lugar da cotação."
+    )
+
+
+def _registrar_cotacao(moeda, preco, origem):
+    ULTIMA_COTACAO[moeda] = (preco, origem, time.time())
+    hora = time.strftime("%H:%M:%S", time.localtime())
+    return preco, f"{origem} · {hora}", ""
 
 
 def faixas_bybit(moeda):
@@ -611,7 +627,7 @@ def ciclo(args):
             aviso,
             faixa,
         )
-    except ValueError as exc:
+    except (ValueError, RuntimeError) as exc:
         print(exc)
         return False
     except Exception as exc:
@@ -785,7 +801,7 @@ class App:
         ).pack(anchor="w", padx=18, pady=(12, 0))
         tk.Label(
             cabeca,
-            text="Futuros perpétuos USDT  ·  a mesma conta da planilha",
+            text="Gestão de risco e liquidação em tempo real",
             bg="#142033",
             fg="#c5d0e0",
             font=("Segoe UI", 10),
@@ -1455,9 +1471,12 @@ class App:
             if self.ultimo is not None:
                 atual = self.ultimo["atual"]
                 origem = self.ultimo["origem"]
+            elif pedido["manual"]:
+                atual = pedido["manual"]
+                origem = "Manual"
             else:
-                atual = pedido["manual"] if pedido["manual"] else pedido["entrada"]
-                origem = "Manual" if pedido["manual"] else "Sem cotação: usando a entrada"
+                self.nota.config(text="Ainda não há cotação válida. A entrada não entra no lugar do preço.")
+                return
             try:
                 pacote = montar(pedido, atual, origem)
             except ValueError as exc:
@@ -1500,14 +1519,10 @@ class App:
 
         def trabalho():
             try:
-                atual = preco_bybit(moeda)
-                origem = "Ao vivo (Bybit, mark)"
-            except Exception:
-                try:
-                    atual = preco_coinbase(moeda)
-                    origem = "Ao vivo (Coinbase)"
-                except Exception:
-                    return
+                atual, origem, _aviso = resolver_cotacao(moeda, None, 0)
+            except Exception as exc:
+                self.root.after(0, lambda erro=exc: self.nota.config(text=str(erro)) if self.vivo else None)
+                return
             self.root.after(0, lambda: self._mostrar_cotacao(geracao, atual, origem))
 
         threading.Thread(target=trabalho, daemon=True).start()
