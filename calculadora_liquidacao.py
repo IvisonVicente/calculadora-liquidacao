@@ -797,6 +797,7 @@ class App:
         self.primeiro_preco = None
         self.preco_medio = None
         self.qtd_fixa = None
+        self.alav_qtd = None
         self.realizado = 0.0
         self.medio_texto = None
         self.equilibrio_texto = None
@@ -807,6 +808,7 @@ class App:
         self.preco_travado = bool(args.preco)
         self._sincronizando = False
         self._par_job = None
+        self._alav_job = None
         self.campo_preco = None
         self.campo_entrada = None
         self.campo_margem = None
@@ -894,7 +896,7 @@ class App:
             ("Saldo disponível (USDT)", self.saldo, None, True, None),
             ("% do capital alocado", self.pct, None, True, None),
             ("Margem usada (USDT)", self.margem_var, None, True, "margem"),
-            ("Alavancagem (x)", self.alav, None, True, None),
+            ("Alavancagem (x)", self.alav, None, True, "alav"),
             ("Preço médio", self.entrada, None, True, "entrada"),
             ("Primeiro preço", None, None, True, "primeiro"),
             ("Preço atual usado", self.manual, None, True, "preco"),
@@ -946,6 +948,8 @@ class App:
                 campo.bind("<FocusOut>", lambda _evento, var=variavel: self._ao_sair(var))
                 if papel == "par":
                     campo.bind("<KeyRelease>", self._par_digitado)
+                elif papel == "alav":
+                    campo.bind("<KeyRelease>", self._alav_digitada)
                 elif papel == "preco":
                     self.campo_preco = campo
                 elif papel == "entrada":
@@ -1172,6 +1176,16 @@ class App:
             self.root.after_cancel(self._par_job)
         self._par_job = self.root.after(450, self._par_aplicar)
 
+    def _alav_digitada(self, _evento=None):
+        if self._alav_job:
+            self.root.after_cancel(self._alav_job)
+        self._alav_job = self.root.after(300, self._alav_aplicar)
+
+    def _alav_aplicar(self):
+        self._alav_job = None
+        if self.vivo:
+            self.recalcular()
+
     def _par_aplicar(self):
         self._par_job = None
         if not self.vivo:
@@ -1199,6 +1213,7 @@ class App:
 
     def _reiniciar_operacao(self):
         self.qtd_fixa = None
+        self.alav_qtd = None
         self.realizado = 0.0
         self.preco_medio = None
         self.primeiro_preco = None
@@ -1219,6 +1234,7 @@ class App:
             self._sincronizando = False
         self.modo_parcial = False
         self.qtd_fixa = None
+        self.alav_qtd = None
         self.realizado = 0.0
         self.equilibrio_texto = None
 
@@ -1341,12 +1357,16 @@ class App:
             entrada = self.preco_medio
             qtd = self.qtd_fixa
             realizado = self.realizado
+            if self.alav_qtd and abs(alav - self.alav_qtd) > 1e-9:
+                qtd *= alav / self.alav_qtd
         elif self.qtd_fixa is not None:
             self.preco_medio = entrada_widget
             self.medio_texto = texto_entrada
             entrada = entrada_widget
             qtd = self.qtd_fixa
             realizado = self.realizado
+            if self.alav_qtd and abs(alav - self.alav_qtd) > 1e-9:
+                qtd *= alav / self.alav_qtd
         else:
             entrada = entrada_widget
             qtd = None
@@ -1406,6 +1426,7 @@ class App:
             self.primeiro_preco = medio
         self.preco_medio = medio
         self.qtd_fixa = efeito["qtd"]
+        self.alav_qtd = numero(self.alav.get())
         self.realizado = efeito["realizado"]
         self.modo_parcial = True
         self.operacao_travada = True
@@ -1457,6 +1478,7 @@ class App:
             self.primeiro_preco = medio
         self.preco_medio = efeito["medio"]
         self.qtd_fixa = efeito["qtd"]
+        self.alav_qtd = numero(self.alav.get())
         self.ultima_qtd = efeito["qtd_add"]
         self.operacao_travada = True
         self.media_equilibrio = False
