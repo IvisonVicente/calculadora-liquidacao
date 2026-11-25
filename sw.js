@@ -1,4 +1,4 @@
-const CACHE = "liqguard-v6";
+const CACHE = "liqguard-v7";
 const ARQUIVOS = [
   "./index.html",
   "./calculadora_liquidacao.html",

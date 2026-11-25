@@ -284,6 +284,37 @@ def nova_entrada(lado, preco_medio, qtd, preco_novo, margem_add, alav):
     }
 
 
+def compor_operacao(lado, entrada, qtd, realizado, margem, alav, taxa, atual, margem_add, fracao):
+    """Aplica nova entrada e, em seguida, a parcial. O preço devolvido continua sendo o custo."""
+    medio = entrada
+    quantidade = qtd
+    lucro = realizado or 0.0
+    margem_pos = margem
+    qtd_add = None
+    if not quantidade or quantidade <= 0:
+        quantidade = margem_pos * alav / medio
+    if margem_add > 0:
+        efeito = nova_entrada(lado, medio, quantidade, atual, margem_add, alav)
+        medio = efeito["medio"]
+        quantidade = efeito["qtd"]
+        margem_pos += margem_add
+        qtd_add = efeito["qtd_add"]
+    if fracao > 0:
+        efeito = realizar_parcial(lado, medio, quantidade, lucro, atual, taxa, fracao)
+        quantidade = efeito["qtd"]
+        lucro = efeito["realizado"]
+    sinal = 1 if lado == "long" else -1
+    equilibrio = medio - sinal * (lucro / quantidade) if lucro and quantidade > 0 else medio
+    return {
+        "entrada": medio,
+        "qtd": quantidade,
+        "realizado": lucro,
+        "margem": margem_pos,
+        "qtd_add": qtd_add,
+        "equilibrio": equilibrio,
+    }
+
+
 def avaliar(lado, modo, saldo, pct, alav, entrada, atual, mmr, taxa, margem=None, qtd=None, realizado=0.0):
     resultado = calcular(
         lado, modo, saldo, pct, alav, entrada, atual, mmr, taxa, qtd=qtd, realizado=realizado, margem=margem
@@ -771,6 +802,7 @@ class App:
         self.equilibrio_texto = None
         self.modo_parcial = False
         self.operacao_travada = False
+        self.media_equilibrio = False
         self.primeiro_celula = None
         self.preco_travado = bool(args.preco)
         self._sincronizando = False
@@ -1174,6 +1206,7 @@ class App:
         self.equilibrio_texto = None
         self.modo_parcial = False
         self.operacao_travada = False
+        self.media_equilibrio = False
         self.ultima_qtd = None
         self.alvo_ativo = False
 
@@ -1247,6 +1280,44 @@ class App:
         self.mmr.set(campo_num(self.mmr_sugerido))
         self.recalcular()
 
+    def _campos_abertos(self):
+        margem_add = 0.0
+        fracao = 0.0
+        if self.nova.get().strip():
+            valor = numero(self.nova.get())
+            if valor > 0:
+                margem_add = valor
+        if self.parcial.get().strip():
+            valor = numero(self.parcial.get())
+            if 0 < valor < 100:
+                fracao = valor / 100
+        return margem_add, fracao
+
+    def _com_campos(self, pedido, atual, margem_add, fracao):
+        if margem_add <= 0 and fracao <= 0:
+            return pedido
+        efeito = compor_operacao(
+            pedido["lado"],
+            pedido["entrada"],
+            pedido["qtd"],
+            pedido["realizado"],
+            pedido["margem"],
+            pedido["alav"],
+            pedido["taxa"],
+            atual,
+            margem_add,
+            fracao,
+        )
+        novo = dict(pedido)
+        novo["entrada"] = efeito["entrada"]
+        novo["qtd"] = efeito["qtd"]
+        novo["realizado"] = efeito["realizado"]
+        novo["margem"] = efeito["margem"]
+        novo["media_equilibrio"] = fracao > 0 and margem_add <= 0
+        if efeito["qtd_add"]:
+            novo["qtd_add_preview"] = efeito["qtd_add"]
+        return novo
+
     def pedido(self):
         moeda = normalizar_moeda(self.moeda.get())
         lado = normalizar_lado(self.lado.get())
@@ -1317,11 +1388,12 @@ class App:
             return
         pacote = self.ultimo
         medio = self.preco_medio if self.preco_medio is not None else pacote["entrada"]
+        qtd = self.qtd_fixa if self.qtd_fixa is not None else pacote["margem"] * pacote["alav"] / medio
         try:
             efeito = realizar_parcial(
                 pacote["lado"],
                 medio,
-                pacote["qtd"],
+                qtd,
                 self.realizado,
                 pacote["atual"],
                 pacote["taxa"],
@@ -1337,7 +1409,8 @@ class App:
         self.realizado = efeito["realizado"]
         self.modo_parcial = True
         self.operacao_travada = True
-        self.medio_texto = campo_num(round(medio, casas_preco(medio)))
+        self.media_equilibrio = True
+        self.medio_texto = campo_num(round(efeito["equilibrio"], casas_preco(efeito["equilibrio"])))
         self.equilibrio_texto = campo_num(efeito["equilibrio"])
         self._sincronizando = True
         self.entrada.set(self.medio_texto)
@@ -1367,11 +1440,12 @@ class App:
             return
         pacote = self.ultimo
         medio = self.preco_medio if self.preco_medio is not None else pacote["entrada"]
+        qtd = self.qtd_fixa if self.qtd_fixa is not None else pacote["margem"] * pacote["alav"] / medio
         try:
             efeito = nova_entrada(
                 pacote["lado"],
                 medio,
-                pacote["qtd"],
+                qtd,
                 pacote["atual"],
                 margem_add,
                 pacote["alav"],
@@ -1385,6 +1459,7 @@ class App:
         self.qtd_fixa = efeito["qtd"]
         self.ultima_qtd = efeito["qtd_add"]
         self.operacao_travada = True
+        self.media_equilibrio = False
         self.modo_parcial = self.realizado != 0
         self.medio_texto = campo_num(round(efeito["medio"], casas_preco(efeito["medio"])))
         nova_margem = numero(self.margem_var.get() or "0") + margem_add
@@ -1491,6 +1566,10 @@ class App:
             return
         self.geracao += 1
         geracao = self.geracao
+        try:
+            margem_add, fracao = self._campos_abertos()
+        except (ValueError, argparse.ArgumentTypeError):
+            margem_add, fracao = 0.0, 0.0
         if not rede:
             if self.ultimo is not None:
                 atual = self.ultimo["atual"]
@@ -1502,7 +1581,7 @@ class App:
                 self.nota.config(text="Ainda não há cotação válida. A entrada não entra no lugar do preço.")
                 return
             try:
-                pacote = montar(pedido, atual, origem)
+                pacote = montar(self._com_campos(pedido, atual, margem_add, fracao), atual, origem)
             except ValueError as exc:
                 self.nota.config(text=str(exc))
                 return
@@ -1517,13 +1596,14 @@ class App:
                 atual, origem, aviso = resolver_cotacao(
                     pedido["moeda"], pedido["manual"], pedido["entrada"]
                 )
+                conta = self._com_campos(pedido, atual, margem_add, fracao)
                 faixa = None
                 try:
-                    nocional = pedido["margem"] * pedido["alav"]
+                    nocional = conta["qtd"] * conta["entrada"] if conta.get("qtd") else conta["margem"] * conta["alav"]
                     faixa = escolher_faixa(faixas_bybit(pedido["moeda"]), nocional)
                 except Exception:
                     faixa = None
-                pacote = montar(pedido, atual, origem, aviso, faixa)
+                pacote = montar(conta, atual, origem, aviso, faixa)
             except Exception as exc:
                 self.root.after(0, lambda erro=exc: self._falha(geracao, erro))
                 return
@@ -1584,9 +1664,11 @@ class App:
                 f"{NOME_MODO[pacote['modo']]}   {pacote['alav']:g}x"
             )
         )
+        mostrar_eq = pacote["media_equilibrio"] if "media_equilibrio" in pacote else self.media_equilibrio
+        media = pacote.get("equilibrio", pacote["entrada"]) if mostrar_eq else pacote["entrada"]
         self.cotacao.config(
             text=(
-                f"Preço médio {br(pacote['entrada'], casas)}    "
+                f"Preço médio {br(media, casas)}    "
                 f"Atual {br(pacote['atual'], casas_preco(pacote['atual']))}    "
                 f"{pacote['origem']}"
             )

@@ -223,7 +223,7 @@
   <main>
     <section class="card">
       <h2>ENTRADAS</h2>
-      <p class="ajuda">Saldo começa em 0. A margem usada é o fator do lucro e da perda. O par puxa a cotação. O preço alvo simula só o P&amp;L.</p>
+      <p class="ajuda">Saldo começa em 0. A margem usada é o fator do lucro e da perda. Nova entrada e parcial atualizam o preço médio e a liquidação na hora. O preço alvo simula só o P&amp;L.</p>
       <form id="form" autocomplete="off">
         <div class="linha"><label for="moeda">Par</label><input id="moeda" value="BTC"></div>
         <div class="linha"><label for="lado">Lado</label>
@@ -287,6 +287,14 @@
       travada: false,
       ultimaQtd: null,
       alvoAtivo: false,
+      previewTexto: null,
+      baseEntradaTexto: null,
+      avisoOperacao: "",
+      avisoFixo: false,
+      opTimer: null,
+      ultimaAntesPreview: null,
+      mediaEhEquilibrio: false,
+      mediaAntesPreview: null,
       cotacao: null,
       busca: 0,
       rodada: 0,
@@ -389,6 +397,51 @@
       const novo = realizado + liquido;
       return { qtd: restante, realizado: novo, liquido, equilibrio: entrada - sinal * (novo / restante) };
     }
+    function mediaVisivel(entrada, equilibrio, realizado) {
+      if (!state.mediaEhEquilibrio) return entrada;
+      if (realizado && equilibrio > 0 && Math.abs(equilibrio - entrada) > Math.max(0.01, Math.abs(entrada) * 1e-6)) return equilibrio;
+      return entrada;
+    }
+    function camposOperacao(estrito) {
+      let margemAdd = 0;
+      let fracao = 0;
+      const nova = $("nova").value.trim();
+      const parcial = $("parcial").value.trim();
+      if (nova) {
+        const valor = num(nova);
+        if (valor > 0) margemAdd = valor;
+        else if (estrito) throw new Error("Informe a nova entrada em USDT de margem.");
+      }
+      if (parcial) {
+        const valor = num(parcial);
+        if (valor > 0 && valor < 100) fracao = valor / 100;
+        else if (estrito) throw new Error("A parcial fica entre 0 e 100%. Use 50 para fechar metade.");
+      }
+      return { margemAdd, fracao };
+    }
+    function compor(lado, entrada, qtd, realizado, margem, alav, taxa, atual, margemAdd, fracao) {
+      let medio = entrada;
+      let quantidade = qtd;
+      let lucro = realizado || 0;
+      let margemPos = margem;
+      let ultima = state.ultimaQtd;
+      if (!(quantidade > 0)) quantidade = margemPos * alav / medio;
+      if (margemAdd > 0) {
+        const efeito = novaEntrada(lado, medio, quantidade, atual, margemAdd, alav);
+        medio = efeito.medio;
+        quantidade = efeito.qtd;
+        margemPos += margemAdd;
+        ultima = efeito.qtdAdd;
+      }
+      if (fracao > 0) {
+        const efeito = realizarParcial(lado, medio, quantidade, lucro, atual, taxa, fracao);
+        quantidade = efeito.qtd;
+        lucro = efeito.realizado;
+      }
+      const sinal = lado === "long" ? 1 : -1;
+      const equilibrio = lucro && quantidade > 0 ? medio - sinal * (lucro / quantidade) : medio;
+      return { entrada: medio, qtd: quantidade, realizado: lucro, margem: margemPos, ultima, equilibrio };
+    }
     function novaEntrada(lado, precoMedio, qtd, precoNovo, margemAdd, alav) {
       if (!(margemAdd > 0)) throw new Error("Informe a nova entrada em USDT de margem.");
       if (!(qtd > 0 && precoMedio > 0 && precoNovo > 0 && alav > 0)) throw new Error("Calcule a posição antes de adicionar uma entrada.");
@@ -429,17 +482,18 @@
       const pct = num($("pct").value || "0");
       const alav = num($("alav").value);
       const margem = num($("margem").value || "0");
-      const entradaCampo = num($("entrada").value);
       const mmr = num($("mmr").value);
       const taxa = num($("taxa").value);
       if (saldo < 0) throw new Error("O saldo não pode ser negativo.");
       if (!(pct >= 0 && pct <= 100)) throw new Error("O percentual alocado fica entre 0 e 100. Para 5%, digite 5.");
       if (!(alav >= 1 && alav <= 200)) throw new Error("A alavancagem fica entre 1 e 200.");
-      if (!(entradaCampo > 0)) throw new Error("O preço de entrada precisa ser maior que zero.");
       if (!(mmr >= 0 && mmr <= 20)) throw new Error("A manutenção é em percentual. Para 0,5%, digite 0,5.");
       if (!(taxa >= 0 && taxa <= 5)) throw new Error("A taxa taker é em percentual. Para 0,055%, digite 0,055.");
       if (!(margem > 0)) throw new Error("Informe a margem usada (USDT). O lucro e a perda usam esse valor.");
-      const texto = $("entrada").value.trim();
+      let texto = $("entrada").value.trim();
+      if (state.previewTexto && texto === state.previewTexto && state.baseEntradaTexto) texto = state.baseEntradaTexto;
+      const entradaCampo = num(texto);
+      if (!(entradaCampo > 0)) throw new Error("O preço de entrada precisa ser maior que zero.");
       let entrada, qtd, realizado;
       if (state.qtdFixa != null && texto === (state.medioTexto || "")) {
         entrada = state.precoMedio;
@@ -473,6 +527,13 @@
       state.travada = false;
       state.ultimaQtd = null;
       state.alvoAtivo = false;
+      state.previewTexto = null;
+      state.baseEntradaTexto = null;
+      state.avisoOperacao = "";
+      state.avisoFixo = false;
+      state.ultimaAntesPreview = null;
+      state.mediaEhEquilibrio = false;
+      state.mediaAntesPreview = null;
       guardar();
     }
     function hora(ms) {
@@ -482,13 +543,14 @@
       const dados = {
         moeda: $("moeda").value, lado: $("lado").value, modo: $("modo").value,
         saldo: $("saldo").value, pct: $("pct").value, margem: $("margem").value,
-        alav: $("alav").value, entrada: $("entrada").value,
+        alav: $("alav").value,
+        entrada: state.previewTexto && state.baseEntradaTexto ? state.baseEntradaTexto : $("entrada").value,
         preco: state.precoTravado ? $("preco").value : "",
         alvo: $("alvo").value, mmr: $("mmr").value, taxa: $("taxa").value,
         auto: $("auto").checked, precoTravado: state.precoTravado, alvoAtivo: state.alvoAtivo,
         primeiro: state.primeiro, precoMedio: state.precoMedio, qtdFixa: state.qtdFixa,
         realizado: state.realizado, medioTexto: state.medioTexto, travada: state.travada,
-        ultimaQtd: state.ultimaQtd, cotacao: state.cotacao
+        ultimaQtd: state.ultimaQtd, cotacao: state.cotacao, mediaEhEquilibrio: state.mediaEhEquilibrio
       };
       try { localStorage.setItem("liqguard-operacao", JSON.stringify(dados)); } catch (e) { /* o aparelho pode bloquear o armazenamento */ }
     }
@@ -509,6 +571,7 @@
       state.medioTexto = dados.medioTexto || null;
       state.travada = !!dados.travada;
       state.ultimaQtd = dados.ultimaQtd ?? null;
+      state.mediaEhEquilibrio = !!dados.mediaEhEquilibrio;
       if (dados.cotacao && dados.cotacao.preco > 0) state.cotacao = dados.cotacao;
       if (state.precoTravado && dados.preco) $("preco").value = dados.preco;
     }
@@ -623,10 +686,11 @@
                 <div class="celula"><span>${item[2]}</span><strong class="${item[2].startsWith("P&L") || item[2].startsWith("ROE") ? classeDir : ""}">${item[3]}</strong></div>`;
       }).join("");
       const relogio = state.cotacao && state.cotacao.moeda === pacote.moeda && !String(pacote.origem).startsWith("Última") && pacote.origem !== "Manual" ? `    ${hora(state.cotacao.quando)}` : "";
+      const media = mediaVisivel(pacote.entrada, pacote.equilibrio, pacote.realizado);
       if (efeito) {
-        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Cotação ${br(pacote.atual, casasPreco(pacote.atual))}    Alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}    ${pacote.origem}${relogio}`;
+        $("cotacao").textContent = `Preço médio ${br(media, casas)}    Cotação ${br(pacote.atual, casasPreco(pacote.atual))}    Alvo ${br(efeito.alvo, casasPreco(efeito.alvo))}    ${pacote.origem}${relogio}`;
       } else {
-        $("cotacao").textContent = `Preço médio ${br(pacote.entrada, casas)}    Atual ${br(pacote.atual, casasPreco(pacote.atual))}    ${pacote.origem}${relogio}`;
+        $("cotacao").textContent = `Preço médio ${br(media, casas)}    Atual ${br(pacote.atual, casasPreco(pacote.atual))}    ${pacote.origem}${relogio}`;
       }
       $("tabela").innerHTML = pacote.tabela.map((linha) => {
         const liq = linha.liq == null ? "sem liquidação" : br(linha.liq, casas);
@@ -634,6 +698,7 @@
         return `<tr class="${linha.marca ? "atual" : ""}"><td>${linha.alav}x${linha.marca ? "  ←" : ""}</td><td>${dinheiro(linha.nocional)}</td><td>${liq}</td><td>${dist}</td></tr>`;
       }).join("");
       const notas = [];
+      if (state.avisoOperacao) notas.push(state.avisoOperacao);
       if (pacote.avisoCotacao) notas.push(pacote.avisoCotacao);
       if (efeito) {
         const nome = efeito.pnl >= 0 ? "Lucro" : "Perda";
@@ -646,7 +711,27 @@
       else notas.push("O saldo está zerado. Lucro, perda e liquidação usam a margem informada em USDT.");
       $("nota").textContent = notas.join("\n");
       state.ultimo = pacote;
+      sincronizarCampoMedia(pacote);
       guardar();
+    }
+    function sincronizarCampoMedia(pacote) {
+      const mostrar = mediaVisivel(pacote.entrada, pacote.equilibrio, pacote.realizado);
+      const texto = campoPreco(mostrar);
+      const camposAbertos = $("nova").value.trim() || $("parcial").value.trim();
+      if (camposAbertos) {
+        if (!state.baseEntradaTexto) state.baseEntradaTexto = state.medioTexto || $("entrada").value.trim();
+        state.previewTexto = texto;
+        if (document.activeElement !== $("entrada")) $("entrada").value = texto;
+        return;
+      }
+      if (state.previewTexto && $("entrada").value.trim() === state.previewTexto && state.baseEntradaTexto && state.qtdFixa == null) {
+        $("entrada").value = state.baseEntradaTexto;
+      }
+      state.previewTexto = null;
+      if (state.qtdFixa == null) state.baseEntradaTexto = null;
+      if (state.travada && state.medioTexto && document.activeElement !== $("entrada") && $("entrada").value.trim() !== state.medioTexto) {
+        $("entrada").value = state.medioTexto;
+      }
     }
     async function recalcular(rede = true) {
       const rodada = ++state.rodada;
@@ -677,12 +762,47 @@
         }
         if (rodada !== state.rodada) return;
         if (!(atual > 0)) throw new Error("O preço atual precisa ser maior que zero.");
-        const pacote = avaliar(pedido, atual);
-        pacote.moeda = pedido.moeda;
-        pacote.lado = pedido.lado;
-        pacote.modo = pedido.modo;
-        pacote.alav = pedido.alav;
-        pacote.entrada = pedido.entrada;
+        const campos = camposOperacao(false);
+        let pedidoConta = pedido;
+        if (campos.margemAdd > 0 || campos.fracao > 0) {
+          const composto = compor(pedido.lado, pedido.entrada, pedido.qtd, pedido.realizado, pedido.margem, pedido.alav, pedido.taxa, atual, campos.margemAdd, campos.fracao);
+          pedidoConta = {
+            ...pedido,
+            entrada: composto.entrada,
+            qtd: composto.qtd,
+            realizado: composto.realizado,
+            margem: composto.margem
+          };
+          if (state.ultimaAntesPreview == null) state.ultimaAntesPreview = state.ultimaQtd;
+          state.ultimaQtd = composto.ultima;
+          if (state.mediaAntesPreview == null) state.mediaAntesPreview = state.mediaEhEquilibrio;
+          state.mediaEhEquilibrio = campos.fracao > 0 && !(campos.margemAdd > 0);
+          const mostrar = mediaVisivel(composto.entrada, composto.equilibrio, composto.realizado);
+          if (campos.margemAdd > 0 && campos.fracao > 0) {
+            state.avisoOperacao = `Nova entrada de ${dinheiro(campos.margemAdd)} USDT e parcial de ${br(campos.fracao * 100, 2)}%. Preço médio ${campoPreco(mostrar)}.`;
+          } else if (campos.margemAdd > 0) {
+            state.avisoOperacao = `Nova entrada de ${dinheiro(campos.margemAdd)} USDT. Preço médio ${campoPreco(mostrar)}.`;
+          } else {
+            state.avisoOperacao = `Parcial de ${br(campos.fracao * 100, 2)}%. Preço médio ${campoPreco(mostrar)}.`;
+          }
+          state.avisoFixo = false;
+        } else {
+          if (state.ultimaAntesPreview != null) {
+            state.ultimaQtd = state.ultimaAntesPreview;
+            state.ultimaAntesPreview = null;
+          }
+          if (state.mediaAntesPreview != null) {
+            state.mediaEhEquilibrio = state.mediaAntesPreview;
+            state.mediaAntesPreview = null;
+          }
+          if (!state.avisoFixo) state.avisoOperacao = "";
+        }
+        const pacote = avaliar(pedidoConta, atual);
+        pacote.moeda = pedidoConta.moeda;
+        pacote.lado = pedidoConta.lado;
+        pacote.modo = pedidoConta.modo;
+        pacote.alav = pedidoConta.alav;
+        pacote.entrada = pedidoConta.entrada;
         pacote.primeiro = pedido.primeiro;
         pacote.atual = atual;
         pacote.origem = origem;
@@ -719,7 +839,48 @@
       clearInterval(state.timer);
       if ($("auto").checked) state.timer = setInterval(() => recalcular(true), 5000);
     }
-    $("btn-calc").onclick = () => recalcular(true);
+    function comprometer(fazAdd, fazParcial) {
+      if (!state.ultimo || !(state.ultimo.atual > 0)) throw new Error("Calcule a posição antes de alterar a operação.");
+      const pedido = ler();
+      const campos = camposOperacao(true);
+      const margemAdd = fazAdd ? campos.margemAdd : 0;
+      const fracao = fazParcial ? campos.fracao : 0;
+      if (fazAdd && !(margemAdd > 0)) throw new Error("Preencha Nova entrada (USDT) com a margem adicional.");
+      if (fazParcial && !(fracao > 0)) throw new Error("Preencha Realizar parcial (%). 50 fecha metade da posição.");
+      const composto = compor(pedido.lado, pedido.entrada, pedido.qtd, pedido.realizado, pedido.margem, pedido.alav, pedido.taxa, state.ultimo.atual, margemAdd, fracao);
+      if (state.primeiro == null) state.primeiro = pedido.entrada;
+      state.precoMedio = composto.entrada;
+      state.qtdFixa = composto.qtd;
+      state.realizado = composto.realizado;
+      state.ultimaQtd = composto.ultima;
+      state.ultimaAntesPreview = null;
+      state.travada = true;
+      state.mediaEhEquilibrio = fracao > 0 && !(margemAdd > 0);
+      state.mediaAntesPreview = null;
+      const mostrar = mediaVisivel(composto.entrada, composto.equilibrio, composto.realizado);
+      state.medioTexto = campoPreco(mostrar);
+      state.previewTexto = null;
+      state.baseEntradaTexto = null;
+      $("entrada").value = state.medioTexto;
+      $("margem").value = campo(composto.margem);
+      if (fazAdd) $("nova").value = "";
+      if (fazParcial) $("parcial").value = "";
+      const partes = [];
+      if (margemAdd > 0) partes.push(`Nova entrada de ${dinheiro(margemAdd)} USDT`);
+      if (fracao > 0) partes.push(`Parcial de ${br(fracao * 100, 2)}%`);
+      state.avisoOperacao = `${partes.join(" e ")}. Preço médio ${state.medioTexto}. Liquidação recalculada.`;
+      state.avisoFixo = true;
+      guardar();
+    }
+    $("btn-calc").onclick = () => {
+      try {
+        if ($("nova").value.trim() || $("parcial").value.trim()) comprometer(true, true);
+      } catch (erro) {
+        $("nota").textContent = erro.message;
+        return;
+      }
+      recalcular(true);
+    };
     $("btn-alvo").onclick = () => {
       if (!$("alvo").value.trim()) {
         state.alvoAtivo = false;
@@ -734,41 +895,13 @@
     };
     $("btn-parcial").onclick = () => {
       try {
-        if (!$("parcial").value.trim()) throw new Error("Preencha Realizar parcial (%). 50 fecha metade da posição.");
-        if (!state.ultimo) throw new Error("Calcule a posição antes de realizar.");
-        const medio = state.precoMedio == null ? state.ultimo.entrada : state.precoMedio;
-        const efeito = realizarParcial(state.ultimo.lado, medio, state.ultimo.qtd, state.realizado, state.ultimo.atual, state.ultimo.taxa, num($("parcial").value) / 100);
-        if (state.primeiro == null) state.primeiro = medio;
-        state.precoMedio = medio;
-        state.qtdFixa = efeito.qtd;
-        state.realizado = efeito.realizado;
-        state.travada = true;
-        state.medioTexto = campoPreco(medio);
-        $("entrada").value = state.medioTexto;
-        $("parcial").value = "";
-        guardar();
-        $("nota").textContent = `Parcial de ${dinheiro(efeito.liquido)} USDT. Primeiro preço ${campoPreco(state.primeiro)}. Preço médio da posição ${state.medioTexto}.`;
+        comprometer(false, true);
         recalcular(false);
       } catch (erro) { $("nota").textContent = erro.message; }
     };
     $("btn-add").onclick = () => {
       try {
-        if (!$("nova").value.trim()) throw new Error("Preencha Nova entrada (USDT) com a margem adicional.");
-        if (!state.ultimo) throw new Error("Informe a margem usada e o preço médio antes de adicionar.");
-        const medio = state.precoMedio == null ? state.ultimo.entrada : state.precoMedio;
-        const margemAdd = num($("nova").value);
-        const efeito = novaEntrada(state.ultimo.lado, medio, state.ultimo.qtd, state.ultimo.atual, margemAdd, state.ultimo.alav);
-        if (state.primeiro == null) state.primeiro = medio;
-        state.precoMedio = efeito.medio;
-        state.qtdFixa = efeito.qtd;
-        state.ultimaQtd = efeito.qtdAdd;
-        state.travada = true;
-        state.medioTexto = campoPreco(efeito.medio);
-        $("entrada").value = state.medioTexto;
-        $("margem").value = campo(num($("margem").value || "0") + margemAdd);
-        $("nova").value = "";
-        guardar();
-        $("nota").textContent = `Nova entrada de ${dinheiro(margemAdd)} USDT de margem. O preço médio ${efeito.melhorou ? "melhorou" : "piorou"} para ${state.medioTexto}. Primeiro preço permanece ${campoPreco(state.primeiro)}.`;
+        comprometer(true, false);
         recalcular(false);
       } catch (erro) { $("nota").textContent = erro.message; }
     };
@@ -814,6 +947,12 @@
     });
     ["saldo", "alav", "entrada", "mmr", "taxa", "modo"].forEach((id) => {
       $(id).addEventListener("change", () => recalcular(true));
+    });
+    ["nova", "parcial"].forEach((id) => {
+      $(id).addEventListener("input", () => {
+        clearTimeout(state.opTimer);
+        state.opTimer = setTimeout(() => recalcular(state.ultimo ? false : true), 350);
+      });
     });
     $("auto").addEventListener("change", agendar);
     $("form").addEventListener("submit", (evento) => evento.preventDefault());
