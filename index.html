@@ -283,6 +283,7 @@
       precoMedio: null,
       qtdFixa: null,
       alavQtd: null,
+      margemQtd: null,
       realizado: 0,
       medioTexto: null,
       travada: false,
@@ -517,6 +518,9 @@
       if (qtd != null && state.alavQtd > 0 && Math.abs(alav - state.alavQtd) > 1e-9) {
         qtd *= alav / state.alavQtd;
       }
+      if (qtd != null && state.margemQtd > 0 && Math.abs(margem - state.margemQtd) > 1e-9) {
+        qtd *= margem / state.margemQtd;
+      }
       if (state.primeiro == null) state.primeiro = entrada;
       let manual = null;
       if (state.precoTravado && $("preco").value.trim()) manual = num($("preco").value);
@@ -525,6 +529,7 @@
     function reiniciar() {
       state.qtdFixa = null;
       state.alavQtd = null;
+      state.margemQtd = null;
       state.realizado = 0;
       state.precoMedio = null;
       state.primeiro = null;
@@ -553,7 +558,7 @@
         preco: state.precoTravado ? $("preco").value : "",
         alvo: $("alvo").value, mmr: $("mmr").value, taxa: $("taxa").value,
         auto: $("auto").checked, precoTravado: state.precoTravado, alvoAtivo: state.alvoAtivo,
-        primeiro: state.primeiro, precoMedio: state.precoMedio, qtdFixa: state.qtdFixa, alavQtd: state.alavQtd,
+        primeiro: state.primeiro, precoMedio: state.precoMedio, qtdFixa: state.qtdFixa, alavQtd: state.alavQtd, margemQtd: state.margemQtd,
         realizado: state.realizado, medioTexto: state.medioTexto, travada: state.travada,
         ultimaQtd: state.ultimaQtd, cotacao: state.cotacao, mediaEhEquilibrio: state.mediaEhEquilibrio
       };
@@ -573,6 +578,7 @@
       state.precoMedio = dados.precoMedio ?? null;
       state.qtdFixa = dados.qtdFixa ?? null;
       state.alavQtd = dados.alavQtd > 0 ? dados.alavQtd : (dados.qtdFixa != null ? num(dados.alav) : null);
+      state.margemQtd = dados.margemQtd > 0 ? dados.margemQtd : (dados.qtdFixa != null ? num(dados.margem) : null);
       state.realizado = Number(dados.realizado) || 0;
       state.medioTexto = dados.medioTexto || null;
       state.travada = !!dados.travada;
@@ -858,6 +864,7 @@
       state.precoMedio = composto.entrada;
       state.qtdFixa = composto.qtd;
       state.alavQtd = pedido.alav;
+      state.margemQtd = composto.margem;
       state.realizado = composto.realizado;
       state.ultimaQtd = composto.ultima;
       state.ultimaAntesPreview = null;
@@ -947,10 +954,18 @@
       if (saldo > 0 && !state.travada) $("margem").value = campo(saldo * num($("pct").value || "0") / 100);
       recalcular(true);
     });
-    $("margem").addEventListener("change", () => {
+    function sincronizarPct() {
       const saldo = num($("saldo").value || "0");
       if (saldo > 0) $("pct").value = campo(num($("margem").value || "0") / saldo * 100);
+    }
+    $("margem").addEventListener("change", () => {
+      try { sincronizarPct(); } catch (e) { /* número ainda incompleto */ }
       recalcular(true);
+    });
+    $("margem").addEventListener("input", () => {
+      try { sincronizarPct(); } catch (e) { /* número ainda incompleto */ }
+      clearTimeout(state.opTimer);
+      state.opTimer = setTimeout(() => recalcular(state.ultimo ? false : true), 350);
     });
     ["saldo", "alav", "entrada", "mmr", "taxa", "modo"].forEach((id) => {
       $(id).addEventListener("change", () => recalcular(true));

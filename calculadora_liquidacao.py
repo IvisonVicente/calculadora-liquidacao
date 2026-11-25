@@ -798,6 +798,7 @@ class App:
         self.preco_medio = None
         self.qtd_fixa = None
         self.alav_qtd = None
+        self.margem_qtd = None
         self.realizado = 0.0
         self.medio_texto = None
         self.equilibrio_texto = None
@@ -809,6 +810,7 @@ class App:
         self._sincronizando = False
         self._par_job = None
         self._alav_job = None
+        self._margem_job = None
         self.campo_preco = None
         self.campo_entrada = None
         self.campo_margem = None
@@ -950,12 +952,13 @@ class App:
                     campo.bind("<KeyRelease>", self._par_digitado)
                 elif papel == "alav":
                     campo.bind("<KeyRelease>", self._alav_digitada)
+                elif papel == "margem":
+                    self.campo_margem = campo
+                    campo.bind("<KeyRelease>", self._margem_digitada)
                 elif papel == "preco":
                     self.campo_preco = campo
                 elif papel == "entrada":
                     self.campo_entrada = campo
-                elif papel == "margem":
-                    self.campo_margem = campo
 
         botoes = tk.Frame(entradas, bg="white")
         botoes.grid(row=17, column=0, columnspan=2, sticky="ew", padx=14, pady=(12, 6))
@@ -1186,6 +1189,18 @@ class App:
         if self.vivo:
             self.recalcular()
 
+    def _margem_digitada(self, _evento=None):
+        if self._margem_job:
+            self.root.after_cancel(self._margem_job)
+        self._margem_job = self.root.after(300, self._margem_aplicar)
+
+    def _margem_aplicar(self):
+        self._margem_job = None
+        if not self.vivo:
+            return
+        self._pct_desde_margem()
+        self.recalcular()
+
     def _par_aplicar(self):
         self._par_job = None
         if not self.vivo:
@@ -1214,6 +1229,7 @@ class App:
     def _reiniciar_operacao(self):
         self.qtd_fixa = None
         self.alav_qtd = None
+        self.margem_qtd = None
         self.realizado = 0.0
         self.preco_medio = None
         self.primeiro_preco = None
@@ -1235,6 +1251,7 @@ class App:
         self.modo_parcial = False
         self.qtd_fixa = None
         self.alav_qtd = None
+        self.margem_qtd = None
         self.realizado = 0.0
         self.equilibrio_texto = None
 
@@ -1263,6 +1280,15 @@ class App:
         self.pct.set(campo_num(margem / saldo * 100))
         self.pct._visto = self.pct.get()
         self._sincronizando = False
+
+    def _qtd_ajustada(self, qtd, alav, margem):
+        if qtd is None:
+            return None
+        if self.alav_qtd and abs(alav - self.alav_qtd) > 1e-9:
+            qtd *= alav / self.alav_qtd
+        if self.margem_qtd and abs(margem - self.margem_qtd) > 1e-9:
+            qtd *= margem / self.margem_qtd
+        return qtd
 
     def fechar(self):
         self.vivo = False
@@ -1357,16 +1383,14 @@ class App:
             entrada = self.preco_medio
             qtd = self.qtd_fixa
             realizado = self.realizado
-            if self.alav_qtd and abs(alav - self.alav_qtd) > 1e-9:
-                qtd *= alav / self.alav_qtd
+            qtd = self._qtd_ajustada(qtd, alav, margem)
         elif self.qtd_fixa is not None:
             self.preco_medio = entrada_widget
             self.medio_texto = texto_entrada
             entrada = entrada_widget
             qtd = self.qtd_fixa
             realizado = self.realizado
-            if self.alav_qtd and abs(alav - self.alav_qtd) > 1e-9:
-                qtd *= alav / self.alav_qtd
+            qtd = self._qtd_ajustada(qtd, alav, margem)
         else:
             entrada = entrada_widget
             qtd = None
@@ -1408,7 +1432,9 @@ class App:
             return
         pacote = self.ultimo
         medio = self.preco_medio if self.preco_medio is not None else pacote["entrada"]
-        qtd = self.qtd_fixa if self.qtd_fixa is not None else pacote["margem"] * pacote["alav"] / medio
+        alav = numero(self.alav.get())
+        margem = numero(self.margem_var.get() or "0")
+        qtd = self._qtd_ajustada(self.qtd_fixa, alav, margem) if self.qtd_fixa is not None else margem * alav / medio
         try:
             efeito = realizar_parcial(
                 pacote["lado"],
@@ -1427,6 +1453,7 @@ class App:
         self.preco_medio = medio
         self.qtd_fixa = efeito["qtd"]
         self.alav_qtd = numero(self.alav.get())
+        self.margem_qtd = numero(self.margem_var.get() or "0")
         self.realizado = efeito["realizado"]
         self.modo_parcial = True
         self.operacao_travada = True
@@ -1461,7 +1488,9 @@ class App:
             return
         pacote = self.ultimo
         medio = self.preco_medio if self.preco_medio is not None else pacote["entrada"]
-        qtd = self.qtd_fixa if self.qtd_fixa is not None else pacote["margem"] * pacote["alav"] / medio
+        alav = numero(self.alav.get())
+        margem = numero(self.margem_var.get() or "0")
+        qtd = self._qtd_ajustada(self.qtd_fixa, alav, margem) if self.qtd_fixa is not None else margem * alav / medio
         try:
             efeito = nova_entrada(
                 pacote["lado"],
@@ -1469,7 +1498,7 @@ class App:
                 qtd,
                 pacote["atual"],
                 margem_add,
-                pacote["alav"],
+                alav,
             )
         except ValueError as exc:
             self.nota.config(text=str(exc))
@@ -1477,14 +1506,15 @@ class App:
         if self.primeiro_preco is None:
             self.primeiro_preco = medio
         self.preco_medio = efeito["medio"]
+        nova_margem = margem + margem_add
         self.qtd_fixa = efeito["qtd"]
-        self.alav_qtd = numero(self.alav.get())
+        self.alav_qtd = alav
+        self.margem_qtd = nova_margem
         self.ultima_qtd = efeito["qtd_add"]
         self.operacao_travada = True
         self.media_equilibrio = False
         self.modo_parcial = self.realizado != 0
         self.medio_texto = campo_num(round(efeito["medio"], casas_preco(efeito["medio"])))
-        nova_margem = numero(self.margem_var.get() or "0") + margem_add
         self._sincronizando = True
         self.entrada.set(self.medio_texto)
         self.margem_var.set(campo_num(nova_margem))
