@@ -515,11 +515,25 @@
         state.realizado = 0;
         if (!state.travada) state.primeiro = entrada;
       }
-      if (qtd != null && state.alavQtd > 0 && Math.abs(alav - state.alavQtd) > 1e-9) {
-        qtd *= alav / state.alavQtd;
-      }
-      if (qtd != null && state.margemQtd > 0 && Math.abs(margem - state.margemQtd) > 1e-9) {
-        qtd *= margem / state.margemQtd;
+      if (Math.abs(realizado || 0) > 1e-8) {
+        if (qtd != null && state.alavQtd > 0 && Math.abs(alav - state.alavQtd) > 1e-9) qtd *= alav / state.alavQtd;
+        if (qtd != null && state.margemQtd > 0 && Math.abs(margem - state.margemQtd) > 1e-9) qtd *= margem / state.margemQtd;
+      } else {
+        const pelaMargem = margem * alav / entrada;
+        let ajustada = qtd;
+        if (ajustada != null && state.alavQtd > 0 && Math.abs(alav - state.alavQtd) > 1e-9) ajustada *= alav / state.alavQtd;
+        if (ajustada != null && state.margemQtd > 0 && Math.abs(margem - state.margemQtd) > 1e-9) ajustada *= margem / state.margemQtd;
+        if (!(ajustada > 0) || Math.abs(ajustada - pelaMargem) / pelaMargem > 1e-4) {
+          state.qtdFixa = null;
+          state.alavQtd = null;
+          state.margemQtd = null;
+          state.ultimaQtd = null;
+          state.ultimaAntesPreview = null;
+          state.travada = false;
+          state.mediaEhEquilibrio = false;
+        }
+        qtd = null;
+        realizado = 0;
       }
       if (state.primeiro == null) state.primeiro = entrada;
       let manual = null;

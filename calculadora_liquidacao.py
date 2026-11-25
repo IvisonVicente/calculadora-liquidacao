@@ -1281,6 +1281,20 @@ class App:
         self.pct._visto = self.pct.get()
         self._sincronizando = False
 
+    def _margem_desta_simulacao(self, qtd, realizado, alav, margem, entrada):
+        if abs(realizado or 0) > 1e-8:
+            return self._qtd_ajustada(qtd, alav, margem), realizado
+        pela = margem * alav / entrada if entrada else None
+        ajustada = self._qtd_ajustada(qtd, alav, margem) if qtd is not None else None
+        if not pela or not ajustada or abs(ajustada - pela) / pela > 1e-4:
+            self.qtd_fixa = None
+            self.alav_qtd = None
+            self.margem_qtd = None
+            self.ultima_qtd = None
+            self.operacao_travada = False
+            self.media_equilibrio = False
+        return None, 0.0
+
     def _qtd_ajustada(self, qtd, alav, margem):
         if qtd is None:
             return None
@@ -1383,14 +1397,12 @@ class App:
             entrada = self.preco_medio
             qtd = self.qtd_fixa
             realizado = self.realizado
-            qtd = self._qtd_ajustada(qtd, alav, margem)
         elif self.qtd_fixa is not None:
             self.preco_medio = entrada_widget
             self.medio_texto = texto_entrada
             entrada = entrada_widget
             qtd = self.qtd_fixa
             realizado = self.realizado
-            qtd = self._qtd_ajustada(qtd, alav, margem)
         else:
             entrada = entrada_widget
             qtd = None
@@ -1399,6 +1411,7 @@ class App:
             self.realizado = 0.0
             if not self.operacao_travada:
                 self.primeiro_preco = entrada
+        qtd, realizado = self._margem_desta_simulacao(qtd, realizado, alav, margem, entrada)
         if self.primeiro_preco is None:
             self.primeiro_preco = entrada
         return {
