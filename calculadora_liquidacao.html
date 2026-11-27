@@ -224,7 +224,7 @@
     .cotacoes th, .cotacoes td { padding: 7px 6px; }
     .cotacoes td small { display: block; font-size: 10px; font-weight: 600; opacity: 0.8; }
     .cotacoes td b { font-weight: 750; }
-    .cotacoes tbody tr { cursor: pointer; }
+    .cotacoes tbody tr { cursor: pointer; touch-action: manipulation; }
     .cotacoes tbody tr:hover { background: #faf8f5; }
     .cotacoes tbody tr.ativa { background: #f4f0ff; }
     .par-nome { display: flex; align-items: center; gap: 8px; font-weight: 700; }
@@ -353,6 +353,17 @@
   </main>
   <script>
     const LEVS = [5, 10, 25, 50, 75, 100, 125, 150];
+    const PARES_GRADE = [
+      ["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"],
+      ["BNB", "BNBUSDT"], ["DOGE", "DOGEUSDT"], ["ADA", "ADAUSDT"], ["AVAX", "AVAXUSDT"],
+      ["LINK", "LINKUSDT"], ["SUI", "SUIUSDT"], ["LTC", "LTCUSDT"], ["DOT", "DOTUSDT"],
+      ["NEAR", "NEARUSDT"], ["AAVE", "AAVEUSDT"], ["APT", "APTUSDT"], ["ARB", "ARBUSDT"],
+      ["OP", "OPUSDT"], ["PEPE", "1000PEPEUSDT"], ["TON", "TONUSDT"], ["WIF", "WIFUSDT"]
+    ];
+    function simboloBybit(moeda) {
+      const par = PARES_GRADE.find((entrada) => entrada[0] === moeda);
+      return par ? par[1] : moeda + "USDT";
+    }
     const state = {
       precoTravado: false,
       primeiro: null,
@@ -724,7 +735,7 @@
       const id = ++state.busca;
       const atual = () => id === state.busca;
       try {
-        const resposta = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${moeda}USDT`);
+        const resposta = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${simboloBybit(moeda)}`);
         if (!atual()) return null;
         const dados = await resposta.json();
         const lista = (dados.result || {}).list || [];
@@ -752,7 +763,7 @@
       }
     }
     async function faixas(moeda) {
-      const resposta = await fetch(`https://api.bybit.com/v5/market/risk-limit?category=linear&symbol=${moeda}USDT`);
+      const resposta = await fetch(`https://api.bybit.com/v5/market/risk-limit?category=linear&symbol=${simboloBybit(moeda)}`);
       const dados = await resposta.json();
       return ((dados.result || {}).list || []).map((item) => ({
         id: Number(item.id || 0),
@@ -777,7 +788,7 @@
     }
     function pintar(pacote) {
       const casas = casasPreco(pacote.entrada);
-      $("titulo").textContent = `${pacote.moeda}USDT   ${pacote.lado === "long" ? "Long" : "Short"}   ${pacote.modo === "cross" ? "Cross" : "Isolada"}   ${pacote.alav}x`;
+      $("titulo").textContent = `${simboloBybit(pacote.moeda)}   ${pacote.lado === "long" ? "Long" : "Short"}   ${pacote.modo === "cross" ? "Cross" : "Isolada"}   ${pacote.alav}x`;
       $("primeiro").textContent = pacote.primeiro ? br(pacote.primeiro, casas) : "—";
       if (!state.precoTravado && document.activeElement !== $("preco")) $("preco").value = campoPreco(pacote.atual);
       const cores = {
@@ -1063,17 +1074,9 @@
     $("preco").addEventListener("input", () => { state.precoTravado = $("preco").value.trim() !== ""; });
     $("moeda").addEventListener("input", () => {
       clearTimeout(state.parTimer);
-      state.parTimer = setTimeout(async () => {
-        state.precoTravado = false;
-        $("preco").value = "";
-        reiniciar();
-        try {
-          const vivo = await buscarPreco(moedaDe($("moeda").value));
-          $("entrada").value = campoPreco(vivo.preco);
-        } catch (erro) {
-          $("nota").textContent = erro.message;
-        }
-        recalcular(true);
+      state.parTimer = setTimeout(() => {
+        try { escolherPar(moedaDe($("moeda").value)); }
+        catch (erro) { $("nota").textContent = erro.message; }
       }, 450);
     });
     $("lado").addEventListener("change", () => { reiniciar(); recalcular(true); });
@@ -1130,13 +1133,6 @@
       dica.hidden = false;
       dica.textContent = "No iPhone ou iPad: toque em Compartilhar e escolha Adicionar à Tela de Início.";
     }
-    const PARES_GRADE = [
-      ["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"],
-      ["BNB", "BNBUSDT"], ["DOGE", "DOGEUSDT"], ["ADA", "ADAUSDT"], ["AVAX", "AVAXUSDT"],
-      ["LINK", "LINKUSDT"], ["SUI", "SUIUSDT"], ["LTC", "LTCUSDT"], ["DOT", "DOTUSDT"],
-      ["NEAR", "NEARUSDT"], ["AAVE", "AAVEUSDT"], ["APT", "APTUSDT"], ["ARB", "ARBUSDT"],
-      ["OP", "OPUSDT"], ["PEPE", "1000PEPEUSDT"], ["TON", "TONUSDT"], ["WIF", "WIFUSDT"]
-    ];
     const CORES_MOEDA = ["#f7931a", "#627eea", "#14b8a6", "#23292f", "#f3ba2f", "#c2a633", "#0033ad", "#e84142", "#2a5ada", "#4da2ff", "#345d9d", "#e6007a", "#00ec97", "#6b4ce6", "#1f9d57", "#28a0f0", "#ff0420", "#3dbe8b", "#0098ea", "#b35cff"];
     const gradeCot = {};
     let gradeQuadro = 0;
@@ -1165,20 +1161,64 @@
       return 6;
     }
     function pintarGrade() {
+      const corpo = $("lista-cotacoes");
       const escolhido = moedaDe($("moeda").value);
-      $("lista-cotacoes").innerHTML = PARES_GRADE.map(([moeda], indice) => {
+      if (corpo.childElementCount !== PARES_GRADE.length) {
+        corpo.innerHTML = PARES_GRADE.map(([moeda], indice) => `<tr data-moeda="${moeda}">
+          <td><span class="par-nome"><i class="moeda-ponto" style="background:${CORES_MOEDA[indice % CORES_MOEDA.length]}">${moeda.slice(0, 1)}</i><span>${moeda}<small>USDT</small></span></span></td>
+          <td></td>
+          <td><b></b><small></small></td>
+        </tr>`).join("");
+      }
+      PARES_GRADE.forEach(([moeda], indice) => {
+        const linha = corpo.children[indice];
         const item = gradeCot[moeda];
-        const ultimo = item ? br(item.ultimo, casasLista(item.ultimo)) : "—";
         const variacao = item && item.variacao != null ? item.variacao : null;
         const pct = item && item.pct != null ? item.pct * 100 : null;
         const classe = variacao == null ? "" : variacao >= 0 ? "lucro" : "perda";
         const sinal = variacao > 0 ? "+" : "";
-        return `<tr class="${moeda === escolhido ? "ativa" : ""}" data-moeda="${moeda}">
-          <td><span class="par-nome"><i class="moeda-ponto" style="background:${CORES_MOEDA[indice % CORES_MOEDA.length]}">${moeda.slice(0, 1)}</i><span>${moeda}<small>USDT</small></span></span></td>
-          <td>${ultimo}</td>
-          <td class="${classe}"><b>${pct == null ? "—" : sinal + br(pct) + "%"}</b><small>${variacao == null ? "" : sinal + br(variacao, casasLista(variacao))}</small></td>
-        </tr>`;
-      }).join("");
+        linha.className = moeda === escolhido ? "ativa" : "";
+        linha.cells[1].textContent = item ? br(item.ultimo, casasLista(item.ultimo)) : "—";
+        linha.cells[2].className = classe;
+        linha.cells[2].querySelector("b").textContent = pct == null ? "—" : sinal + br(pct) + "%";
+        linha.cells[2].querySelector("small").textContent = variacao == null ? "" : sinal + br(variacao, casasLista(variacao));
+      });
+    }
+    async function escolherPar(moeda) {
+      clearTimeout(state.parTimer);
+      $("moeda").value = moeda;
+      state.precoTravado = false;
+      reiniciar();
+      const item = gradeCot[moeda];
+      if (item && item.ultimo > 0) {
+        const texto = campoPreco(item.ultimo);
+        $("entrada").value = texto;
+        $("preco").value = texto;
+      } else {
+        $("preco").value = "";
+      }
+      pedirGrade();
+      const rolagem = simulacaoZerada() ? document.querySelector(".entradas") : document.querySelector(".resultado");
+      if (rolagem) rolagem.scrollIntoView({ behavior: "smooth", block: "start" });
+      try {
+        const vivo = await buscarPreco(moeda);
+        if ($("moeda").value.trim().toUpperCase() !== moeda) return;
+        if (vivo) {
+          $("entrada").value = campoPreco(vivo.preco);
+          if (!state.precoTravado) $("preco").value = campoPreco(vivo.preco);
+        }
+      } catch (erro) {
+        if (!(item && item.ultimo > 0)) {
+          $("nota").textContent = erro.message;
+          return;
+        }
+      }
+      if ($("moeda").value.trim().toUpperCase() !== moeda) return;
+      if (simulacaoZerada()) {
+        $("nota").textContent = `${moeda} na simulação, a ${$("entrada").value || "sem preço"}. Informe a margem e a alavancagem para calcular.`;
+        return;
+      }
+      recalcular(true);
     }
     async function puxarGrade() {
       const resposta = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
@@ -1210,10 +1250,8 @@
       abrir();
       $("lista-cotacoes").onclick = (evento) => {
         const linha = evento.target.closest("tr");
-        if (!linha) return;
-        $("moeda").value = linha.dataset.moeda;
-        $("moeda").dispatchEvent(new Event("input"));
-        pedirGrade();
+        if (!linha || !linha.dataset.moeda) return;
+        escolherPar(linha.dataset.moeda);
       };
     }
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
