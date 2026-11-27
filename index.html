@@ -34,7 +34,7 @@
         #f7f5f2;
     }
     header { padding: calc(22px + env(safe-area-inset-top)) 28px 0; }
-    .cabeca, #como-instalar, main { max-width: 1120px; margin-left: auto; margin-right: auto; }
+    .cabeca, #como-instalar, main { max-width: 1280px; margin-left: auto; margin-right: auto; }
     .cabeca { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .marca { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
     .marca h1 { margin: 0; line-height: 0; }
@@ -56,7 +56,8 @@
     #como-instalar { margin-top: 10px; color: var(--muted); font-size: 13px; }
     main {
       display: grid;
-      grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+      grid-template-columns: minmax(280px, 340px) minmax(300px, 360px) minmax(0, 1fr);
+      grid-template-areas: "cotacoes entradas resultado";
       gap: 22px;
       padding: 18px 28px 48px;
       align-items: start;
@@ -202,8 +203,61 @@
     }
     .tabela-box { margin-top: 14px; overflow: hidden; }
     .tabela-box h2 { padding-bottom: 8px; }
+    .entradas { grid-area: entradas; }
+    .resultado { grid-area: resultado; }
+    .cotacoes { grid-area: cotacoes; display: flex; flex-direction: column; max-height: calc(100vh - 150px); overflow: hidden; position: sticky; top: 16px; }
+    .cotacoes-topo { display: flex; align-items: center; justify-content: space-between; padding: 18px 16px 8px; }
+    .cotacoes-topo h2 { padding: 0; }
+    .cotacoes-estado { color: #1f9d57; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+    .cotacoes-estado::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background: #1f9d57;
+      transform: translateY(-1px);
+    }
+    .cotacoes-rola { overflow: auto; }
+    .cotacoes table { font-size: 12px; }
+    .cotacoes th, .cotacoes td { padding: 7px 6px; }
+    .cotacoes td small { display: block; font-size: 10px; font-weight: 600; opacity: 0.8; }
+    .cotacoes td b { font-weight: 750; }
+    .cotacoes tbody tr { cursor: pointer; }
+    .cotacoes tbody tr:hover { background: #faf8f5; }
+    .cotacoes tbody tr.ativa { background: #f4f0ff; }
+    .par-nome { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .par-nome small { display: block; color: #a1a6ad; font-weight: 600; font-size: 10px; letter-spacing: 0.04em; }
+    .moeda-ponto {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      flex: none;
+    }
+    @media (max-width: 1180px) {
+      main {
+        grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+        grid-template-areas:
+          "cotacoes entradas"
+          "cotacoes resultado";
+      }
+    }
     @media (max-width: 860px) {
-      main { grid-template-columns: 1fr; padding: 14px 14px 32px; }
+      main {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "entradas"
+          "resultado"
+          "cotacoes";
+        padding: 14px 14px 32px;
+      }
+      .cotacoes { position: static; max-height: 420px; }
       header { padding-inline: 14px; }
       .cabeca, #como-instalar { margin-inline: 14px; }
       .logo { width: min(232px, 100%); border-radius: 16px; }
@@ -228,7 +282,7 @@
     <p id="como-instalar" hidden></p>
   </header>
   <main>
-    <section class="card">
+    <section class="card entradas">
       <h2>ENTRADAS</h2>
       <p class="ajuda">Saldo começa em 0. A margem usada é o fator do lucro e da perda. Nova entrada e parcial atualizam o preço médio e a liquidação na hora. O preço alvo simula só o P&amp;L. Zerar simulação apaga margem, alavancagem, preço médio, preço alvo e a memória da última conta.</p>
       <form id="form" autocomplete="off">
@@ -262,7 +316,7 @@
         <label class="auto"><input id="auto" type="checkbox" checked>Cotação do par em tempo real (5 s)</label>
       </form>
     </section>
-    <section>
+    <section class="resultado">
       <div class="topo-resultado">
         <h3 id="titulo">Aguardando cálculo</h3>
         <p class="cotacao" id="cotacao"></p>
@@ -281,6 +335,20 @@
         </table>
       </div>
       <p class="nota" id="nota">Informe a margem usada (USDT). O lucro e a perda usam esse valor.</p>
+    </section>
+    <section class="card cotacoes" id="painel-cotacoes">
+      <div class="cotacoes-topo">
+        <h2>COTAÇÕES</h2>
+        <span class="cotacoes-estado" id="cotacoes-estado">conectando</span>
+      </div>
+      <div class="cotacoes-rola">
+        <table>
+          <thead>
+            <tr><th>Par</th><th>Último</th><th>24h</th></tr>
+          </thead>
+          <tbody id="lista-cotacoes"></tbody>
+        </table>
+      </div>
     </section>
   </main>
   <script>
@@ -1062,7 +1130,94 @@
       dica.hidden = false;
       dica.textContent = "No iPhone ou iPad: toque em Compartilhar e escolha Adicionar à Tela de Início.";
     }
+    const PARES_GRADE = [
+      ["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"],
+      ["BNB", "BNBUSDT"], ["DOGE", "DOGEUSDT"], ["ADA", "ADAUSDT"], ["AVAX", "AVAXUSDT"],
+      ["LINK", "LINKUSDT"], ["SUI", "SUIUSDT"], ["LTC", "LTCUSDT"], ["DOT", "DOTUSDT"],
+      ["NEAR", "NEARUSDT"], ["AAVE", "AAVEUSDT"], ["APT", "APTUSDT"], ["ARB", "ARBUSDT"],
+      ["OP", "OPUSDT"], ["PEPE", "1000PEPEUSDT"], ["TON", "TONUSDT"], ["WIF", "WIFUSDT"]
+    ];
+    const CORES_MOEDA = ["#f7931a", "#627eea", "#14b8a6", "#23292f", "#f3ba2f", "#c2a633", "#0033ad", "#e84142", "#2a5ada", "#4da2ff", "#345d9d", "#e6007a", "#00ec97", "#6b4ce6", "#1f9d57", "#28a0f0", "#ff0420", "#3dbe8b", "#0098ea", "#b35cff"];
+    const gradeCot = {};
+    let gradeQuadro = 0;
+    function pedirGrade() {
+      if (gradeQuadro) return;
+      gradeQuadro = requestAnimationFrame(() => { gradeQuadro = 0; pintarGrade(); });
+    }
+    function guardarTicker(item) {
+      const simbolo = String(item.symbol || "");
+      const par = PARES_GRADE.find((entrada) => entrada[1] === simbolo);
+      if (!par) return;
+      const moeda = par[0];
+      const anterior = gradeCot[moeda] || {};
+      const ultimo = item.lastPrice != null && item.lastPrice !== "" ? Number(item.lastPrice) : anterior.ultimo;
+      const prev = item.prevPrice24h != null && item.prevPrice24h !== "" ? Number(item.prevPrice24h) : anterior.prev;
+      const pct = item.price24hPcnt != null && item.price24hPcnt !== "" ? Number(item.price24hPcnt) : anterior.pct;
+      if (!(ultimo > 0)) return;
+      gradeCot[moeda] = { ultimo, prev, pct, variacao: prev > 0 ? ultimo - prev : anterior.variacao };
+      pedirGrade();
+    }
+    function casasLista(preco) {
+      const abs = Math.abs(preco);
+      if (abs >= 100) return 2;
+      if (abs >= 1) return 2;
+      if (abs >= 0.01) return 4;
+      return 6;
+    }
+    function pintarGrade() {
+      const escolhido = moedaDe($("moeda").value);
+      $("lista-cotacoes").innerHTML = PARES_GRADE.map(([moeda], indice) => {
+        const item = gradeCot[moeda];
+        const ultimo = item ? br(item.ultimo, casasLista(item.ultimo)) : "—";
+        const variacao = item && item.variacao != null ? item.variacao : null;
+        const pct = item && item.pct != null ? item.pct * 100 : null;
+        const classe = variacao == null ? "" : variacao >= 0 ? "lucro" : "perda";
+        const sinal = variacao > 0 ? "+" : "";
+        return `<tr class="${moeda === escolhido ? "ativa" : ""}" data-moeda="${moeda}">
+          <td><span class="par-nome"><i class="moeda-ponto" style="background:${CORES_MOEDA[indice % CORES_MOEDA.length]}">${moeda.slice(0, 1)}</i><span>${moeda}<small>USDT</small></span></span></td>
+          <td>${ultimo}</td>
+          <td class="${classe}"><b>${pct == null ? "—" : sinal + br(pct) + "%"}</b><small>${variacao == null ? "" : sinal + br(variacao, casasLista(variacao))}</small></td>
+        </tr>`;
+      }).join("");
+    }
+    async function puxarGrade() {
+      const resposta = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
+      const dados = await resposta.json();
+      ((dados.result || {}).list || []).forEach(guardarTicker);
+      $("cotacoes-estado").textContent = "Bybit · ao vivo";
+    }
+    function ligarGrade() {
+      pintarGrade();
+      puxarGrade().catch(() => { $("cotacoes-estado").textContent = "sem conexão"; });
+      const abrir = () => {
+        let socket;
+        try { socket = new WebSocket("wss://stream.bybit.com/v5/public/linear"); }
+        catch (erro) { return; }
+        socket.onopen = () => {
+          socket.send(JSON.stringify({ op: "subscribe", args: PARES_GRADE.map((par) => "tickers." + par[1]) }));
+          $("cotacoes-estado").textContent = "Bybit · ao vivo";
+        };
+        socket.onmessage = (evento) => {
+          let msg;
+          try { msg = JSON.parse(evento.data); } catch (erro) { return; }
+          if (msg.data && msg.topic) {
+            const lista = Array.isArray(msg.data) ? msg.data : [msg.data];
+            lista.forEach(guardarTicker);
+          }
+        };
+        socket.onclose = () => setTimeout(abrir, 1500);
+      };
+      abrir();
+      $("lista-cotacoes").onclick = (evento) => {
+        const linha = evento.target.closest("tr");
+        if (!linha) return;
+        $("moeda").value = linha.dataset.moeda;
+        $("moeda").dispatchEvent(new Event("input"));
+        pedirGrade();
+      };
+    }
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+    ligarGrade();
   </script>
 </body>
 </html>
