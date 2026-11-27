@@ -132,6 +132,13 @@
       background: linear-gradient(90deg, #6d5efc, #ff5d8f);
       box-shadow: 0 10px 22px rgba(255, 93, 143, 0.22);
     }
+    button.zerar {
+      width: 100%;
+      margin-top: 2px;
+      background: #fff;
+      color: #8a3b3b;
+      border: 1px solid #e6e1da;
+    }
     .auto {
       display: flex;
       gap: 8px;
@@ -223,7 +230,7 @@
   <main>
     <section class="card">
       <h2>ENTRADAS</h2>
-      <p class="ajuda">Saldo começa em 0. A margem usada é o fator do lucro e da perda. Nova entrada e parcial atualizam o preço médio e a liquidação na hora. O preço alvo simula só o P&amp;L.</p>
+      <p class="ajuda">Saldo começa em 0. A margem usada é o fator do lucro e da perda. Nova entrada e parcial atualizam o preço médio e a liquidação na hora. O preço alvo simula só o P&amp;L. Zerar simulação apaga margem, alavancagem, preço médio, preço alvo e a memória da última conta.</p>
       <form id="form" autocomplete="off">
         <div class="linha"><label for="moeda">Par</label><input id="moeda" value="BTC"></div>
         <div class="linha"><label for="lado">Lado</label>
@@ -250,6 +257,7 @@
           <button class="verde" id="btn-parcial" type="button">Realizar parcial</button>
           <button class="claro" id="btn-mmr" type="button">Usar MMR da Bybit</button>
           <button class="verde largo" id="btn-alvo" type="button">Preço Alvo Manual</button>
+          <button class="zerar" id="btn-zerar" type="button">Zerar simulação</button>
         </div>
         <label class="auto"><input id="auto" type="checkbox" checked>Cotação do par em tempo real (5 s)</label>
       </form>
@@ -560,6 +568,36 @@
       state.mediaAntesPreview = null;
       guardar();
     }
+    function simulacaoZerada() {
+      return !$("margem").value.trim() && !$("alav").value.trim();
+    }
+    function limparResultado() {
+      $("titulo").textContent = "Aguardando cálculo";
+      $("cotacao").textContent = "";
+      $("status").textContent = "—";
+      $("status").className = "status";
+      $("grade").innerHTML = "";
+      $("tabela").innerHTML = "";
+      $("primeiro").textContent = "—";
+      state.ultimo = null;
+    }
+    function zerarSimulacao() {
+      $("saldo").value = "0";
+      $("pct").value = "";
+      $("margem").value = "";
+      $("alav").value = "";
+      $("entrada").value = "";
+      $("preco").value = "";
+      $("alvo").value = "";
+      $("nova").value = "";
+      $("parcial").value = "";
+      state.precoTravado = false;
+      state.alvoAtivo = false;
+      state.cotacao = null;
+      reiniciar();
+      limparResultado();
+      $("nota").textContent = "Simulação zerada. Informe a margem, a alavancagem e o preço médio para começar de novo.";
+    }
     function hora(ms) {
       return new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     }
@@ -760,6 +798,13 @@
       }
     }
     async function recalcular(rede = true) {
+      if (simulacaoZerada()) {
+        limparResultado();
+        $("nota").textContent = "Simulação zerada. Informe a margem, a alavancagem e o preço médio para começar de novo.";
+        guardar();
+        if (rede && $("auto").checked) cotacaoSolta();
+        return;
+      }
       const rodada = ++state.rodada;
       let pedido;
       try { pedido = ler(); }
@@ -900,6 +945,7 @@
       state.avisoFixo = true;
       guardar();
     }
+    $("btn-zerar").onclick = () => zerarSimulacao();
     $("btn-calc").onclick = () => {
       try {
         if ($("nova").value.trim() || $("parcial").value.trim()) comprometer(true, true);

@@ -1025,6 +1025,19 @@ class App:
             padx=10,
             pady=6,
         ).grid(row=18, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 6))
+        tk.Button(
+            entradas,
+            text="Zerar simulação",
+            command=self.zerar_simulacao,
+            bg="white",
+            fg="#8a3b3b",
+            activebackground="#f8f4f4",
+            activeforeground="#8a3b3b",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            pady=6,
+        ).grid(row=19, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 6))
         tk.Checkbutton(
             entradas,
             text="Cotação do par em tempo real (5 s)",
@@ -1034,7 +1047,7 @@ class App:
             fg="#1d2736",
             activebackground="white",
             font=("Segoe UI", 9),
-        ).grid(row=19, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
+        ).grid(row=20, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
 
         direita = tk.Frame(corpo, bg="#e7ebf2")
         direita.grid(row=0, column=1, sticky="nsew")
@@ -1240,6 +1253,40 @@ class App:
         self.media_equilibrio = False
         self.ultima_qtd = None
         self.alvo_ativo = False
+
+    def zerar_simulacao(self):
+        self._sincronizando = True
+        for variavel, valor in (
+            (self.saldo, "0"),
+            (self.pct, ""),
+            (self.margem_var, ""),
+            (self.alav, ""),
+            (self.entrada, ""),
+            (self.manual, ""),
+            (self.alvo, ""),
+            (self.nova, ""),
+            (self.parcial, ""),
+        ):
+            variavel.set(valor)
+            variavel._visto = valor
+        self._sincronizando = False
+        self.preco_travado = False
+        self._reiniciar_operacao()
+        self.ultimo = None
+        self.titulo.config(text="Aguardando cálculo")
+        self.cotacao.config(text="")
+        self.status.config(text="—", bg="#eef2f7", fg="#142033")
+        if self.primeiro_celula is not None:
+            self.primeiro_celula.config(text="—")
+        for rotulo in getattr(self, "rotulos", {}).values():
+            rotulo.config(text="—", fg="#142033")
+        if getattr(self, "tabela", None) is not None:
+            filhos = self.tabela.get_children()
+            if filhos:
+                self.tabela.delete(*filhos)
+        self.nota.config(
+            text="Simulação zerada. Informe a margem, a alavancagem e o preço médio para começar de novo."
+        )
 
     def _limpar_parcial(self, restaurar_entrada=False):
         if not self.modo_parcial and self.qtd_fixa is None:
