@@ -787,6 +787,8 @@
       return texto;
     }
     function pintar(pacote) {
+      try { if (moedaDe($("moeda").value) !== pacote.moeda) return; }
+      catch (erro) { return; }
       const casas = casasPreco(pacote.entrada);
       $("titulo").textContent = `${simboloBybit(pacote.moeda)}   ${pacote.lado === "long" ? "Long" : "Short"}   ${pacote.modo === "cross" ? "Cross" : "Isolada"}   ${pacote.alav}x`;
       $("primeiro").textContent = pacote.primeiro ? br(pacote.primeiro, casas) : "—";
@@ -878,8 +880,13 @@
     }
     async function recalcular(rede = true) {
       if (simulacaoZerada()) {
+        const moedaAtual = $("moeda").value.trim();
+        const precoAtual = $("entrada").value.trim();
         limparResultado();
-        $("nota").textContent = "Simulação zerada. Informe a margem, a alavancagem e o preço médio para começar de novo.";
+        if (moedaAtual && precoAtual) mostrarPar(moedaDe(moedaAtual), num(precoAtual), false);
+        $("nota").textContent = moedaAtual && precoAtual
+          ? `${moedaDe(moedaAtual)} entrou na simulação a ${precoAtual}. Informe a margem e a alavancagem para calcular.`
+          : "Simulação zerada. Informe a margem, a alavancagem e o preço médio para começar de novo.";
         guardar();
         if (rede && $("auto").checked) cotacaoSolta();
         return;
@@ -1184,38 +1191,53 @@
         linha.cells[2].querySelector("small").textContent = variacao == null ? "" : sinal + br(variacao, casasLista(variacao));
       });
     }
+    function mostrarPar(moeda, preco, rolar) {
+      const lado = $("lado").value || "Long";
+      const modo = $("modo").value || "Cross";
+      const alav = $("alav").value.trim();
+      $("titulo").textContent = `${simboloBybit(moeda)}   ${lado}   ${modo}${alav ? "   " + alav + "x" : ""}`;
+      $("cotacao").textContent = preco > 0
+        ? `Preço médio ${campoPreco(preco)}    Atual ${campoPreco(preco)}    Ao vivo`
+        : "Buscando cotação...";
+      if (!rolar) return;
+      const destino = document.querySelector(".resultado");
+      if (destino) destino.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
     async function escolherPar(moeda) {
       clearTimeout(state.parTimer);
+      state.rodada += 1;
+      state.busca += 1;
       $("moeda").value = moeda;
       state.precoTravado = false;
       reiniciar();
       const item = gradeCot[moeda];
-      if (item && item.ultimo > 0) {
-        const texto = campoPreco(item.ultimo);
+      const imediato = item && item.ultimo > 0 ? item.ultimo : 0;
+      if (imediato > 0) {
+        const texto = campoPreco(imediato);
         $("entrada").value = texto;
         $("preco").value = texto;
       } else {
         $("preco").value = "";
       }
       pedirGrade();
-      const rolagem = simulacaoZerada() ? document.querySelector(".entradas") : document.querySelector(".resultado");
-      if (rolagem) rolagem.scrollIntoView({ behavior: "smooth", block: "start" });
-      try {
-        const vivo = await buscarPreco(moeda);
-        if ($("moeda").value.trim().toUpperCase() !== moeda) return;
-        if (vivo) {
-          $("entrada").value = campoPreco(vivo.preco);
-          if (!state.precoTravado) $("preco").value = campoPreco(vivo.preco);
-        }
-      } catch (erro) {
-        if (!(item && item.ultimo > 0)) {
+      mostrarPar(moeda, imediato, true);
+      let vivo = null;
+      try { vivo = await buscarPreco(moeda); }
+      catch (erro) {
+        if (!(imediato > 0)) {
           $("nota").textContent = erro.message;
           return;
         }
       }
       if ($("moeda").value.trim().toUpperCase() !== moeda) return;
-      if (simulacaoZerada()) {
-        $("nota").textContent = `${moeda} na simulação, a ${$("entrada").value || "sem preço"}. Informe a margem e a alavancagem para calcular.`;
+      if (vivo && vivo.preco > 0) {
+        $("entrada").value = campoPreco(vivo.preco);
+        if (!state.precoTravado) $("preco").value = campoPreco(vivo.preco);
+        mostrarPar(moeda, vivo.preco, false);
+      }
+      if (simulacaoZerada() || !(num($("margem").value || "0") > 0) || !(num($("alav").value || "0") >= 1)) {
+        $("nota").textContent = `${moeda} entrou na simulação a ${$("entrada").value || "sem preço"}. Informe a margem e a alavancagem para calcular.`;
+        guardar();
         return;
       }
       recalcular(true);
@@ -1248,11 +1270,22 @@
         socket.onclose = () => setTimeout(abrir, 1500);
       };
       abrir();
-      $("lista-cotacoes").onclick = (evento) => {
-        const linha = evento.target.closest("tr");
-        if (!linha || !linha.dataset.moeda) return;
-        escolherPar(linha.dataset.moeda);
-      };
+      const painel = $("painel-cotacoes");
+      let toque = null;
+      painel.addEventListener("pointerdown", (evento) => {
+        const linha = evento.target.closest("tr[data-moeda]");
+        if (!linha) return;
+        toque = { moeda: linha.dataset.moeda, x: evento.clientX, y: evento.clientY };
+      });
+      painel.addEventListener("pointerup", (evento) => {
+        if (!toque) return;
+        const linha = evento.target.closest("tr[data-moeda]");
+        const moeda = toque.moeda;
+        const parado = Math.abs(evento.clientX - toque.x) < 14 && Math.abs(evento.clientY - toque.y) < 14;
+        toque = null;
+        if (!linha || linha.dataset.moeda !== moeda || !parado) return;
+        escolherPar(moeda);
+      });
     }
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
     ligarGrade();
